@@ -1,5 +1,10 @@
-<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Snake</title><link rel="stylesheet" href="/site.css">
-<style>body{overflow:hidden;text-align:center}#c{touch-action:none;background:#111;border:2px solid #333;margin-top:48px;max-width:96vw;max-height:78vh}#hud{font:20px monospace;margin-top:10px}</style></head>
-<body><a class="back" href="/">&larr; Games</a><div id="hud">Score 0 · Best 0</div><canvas id="c" width="400" height="400"></canvas>
-<p id="msg" style="font:16px monospace;color:#999">Press an arrow key or swipe to start</p><script src="snake.js"></script></body></html>
+<!doctype html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Snake</title>
+<style>html,body{margin:0;height:100%;background:#000;color:#fff;font:18px monospace;overflow:hidden;touch-action:none;user-select:none}
+#hud{position:fixed;top:8px;left:0;right:0;text-align:center}#c{display:block;margin:auto;background:#111}
+#over{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:#000a}
+button{font:20px monospace;padding:8px 20px}a{color:#8cf}</style></head>
+<body><div id="hud">Score 0 · Best 0</div><canvas id="c"></canvas>
+<div id="over"><div id="title">SNAKE</div><div>Arrows/WASD or swipe</div><button id="go">Play</button><a href="/">Back to menu</a></div>
+<script src="snake.js"></script></body></html>

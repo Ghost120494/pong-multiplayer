@@ -5,7 +5,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
 import { WebSocketServer, WebSocket } from "ws";
-import { initState, step, H, State, Input } from "../pong/core";
+import { initState, step, H, State, Input } from "./src/core";
 
 const PORT = Number(process.env.PORT ?? 8080);
 const PUBLIC = process.env.PUBLIC_DIR ?? path.resolve(__dirname, "public");
@@ -59,7 +59,8 @@ const server = http.createServer(async (req, res) => {
   const ip = req.socket.remoteAddress ?? "?";
   if (req.method !== "GET") return json(res, 405, { error: "method" });
   // static
-  let p = url.pathname === "/" ? "/index.html" : url.pathname;
+  if (url.pathname === "/pong" || url.pathname === "/snake" || url.pathname === "/incremental") { res.writeHead(301, { location: url.pathname + "/" + url.search }); return res.end(); }
+  let p = url.pathname.endsWith("/") ? url.pathname + "index.html" : url.pathname;
   const file = path.join(PUBLIC, path.normalize(p).replace(/^(\.\.[/\\])+/, ""));
   if (!file.startsWith(PUBLIC) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) { res.writeHead(404); return res.end("not found"); }
   res.writeHead(200, { "content-type": MIME[path.extname(file)] ?? "application/octet-stream", ...SEC_HEADERS });

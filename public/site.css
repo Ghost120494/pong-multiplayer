@@ -1,0 +1,6 @@
+html,body{margin:0;min-height:100%;background:#0d0d12;color:#eee;font:18px system-ui,sans-serif}
+main{max-width:520px;margin:0 auto;padding:12vh 20px}
+h1{font:700 40px monospace;margin:0}.sub{color:#999;margin:6px 0 28px}
+.menu{display:grid;gap:14px}.menu a{display:block;padding:18px 20px;border:2px solid #333;border-radius:10px;color:#eee;text-decoration:none;background:#16161e}
+.menu a:hover,.menu a:focus{border-color:#7cf;background:#1b1b26}.menu b{display:block;font:700 22px monospace;margin-bottom:4px}.menu span{color:#aaa;font-size:15px}
+.back{position:fixed;top:10px;left:12px;color:#7cf;font:16px monospace;text-decoration:none;z-index:5}

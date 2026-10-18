@@ -58,7 +58,7 @@ let target: number | null = null, lastSent = -1, lastSendAt = 0;
 function send(t: number) {
   t = Math.min(1, Math.max(0, t));
   const now = performance.now();
-  if (ws.readyState !== 1 || now - lastSendAt < 16 || Math.abs(t - lastSent) < 0.002) return;
+  if (ws.readyState !== 1 || now - lastSendAt < 8 || t === lastSent) return;
   ws.send(JSON.stringify({ type: "input", targetY: t }));
   lastSent = t; lastSendAt = now;
 }
@@ -68,6 +68,7 @@ function pointerToTarget(e: PointerEvent): number {
   return portrait ? (e.clientX - r.left) / r.width : (e.clientY - r.top) / r.height;
 }
 canvas.addEventListener("pointerdown", (e) => { canvas.setPointerCapture(e.pointerId); target = pointerToTarget(e); send(target); });
+canvas.addEventListener("pointerrawupdate" as any, (e: any) => { if (e.pointerType === "mouse" || e.buttons) { target = pointerToTarget(e); send(target); } });
 canvas.addEventListener("pointermove", (e) => { if (e.pointerType === "mouse" || e.buttons) { target = pointerToTarget(e); send(target); } });
 
 // Keyboard sends targets too: nudge from current paddle position.
@@ -81,7 +82,9 @@ function frame() {
   requestAnimationFrame(frame);
   if (curr && (keys.has("ArrowUp") || keys.has("w") || keys.has("ArrowDown") || keys.has("s"))) {
     const up = keys.has("ArrowUp") || keys.has("w");
-    send((curr.paddles[myIndex()] + PADDLE_H / 2 + (up ? -40 : 40)) / H);
+    const base = target ?? (curr.paddles[myIndex()] + PADDLE_H / 2) / H;
+    target = Math.min(1, Math.max(0, base + (up ? -0.015 : 0.015)));
+    send(target);
   }
   const s = canvas.width / (portrait ? H : W);
   ctx.setTransform(s, 0, 0, s, 0, 0);
@@ -96,8 +99,12 @@ function frame() {
   const bx = reset ? curr.ball.x : lerp(p.ball.x, curr.ball.x, t);
   const by = reset ? curr.ball.y : lerp(p.ball.y, curr.ball.y, t);
   ctx.fillStyle = "#fff";
-  ctx.fillRect(0, lerp(p.paddles[0], curr.paddles[0], t), PADDLE_W, PADDLE_H);
-  ctx.fillRect(W - PADDLE_W, lerp(p.paddles[1], curr.paddles[1], t), PADDLE_W, PADDLE_H);
+  // Own paddle is drawn at the local pointer position right away (no server round trip);
+  // the opponent's paddle is interpolated from server state.
+  const py = [lerp(p.paddles[0], curr.paddles[0], t), lerp(p.paddles[1], curr.paddles[1], t)];
+  if (target !== null) py[side] = Math.min(H - PADDLE_H, Math.max(0, target * H - PADDLE_H / 2));
+  ctx.fillRect(0, py[0], PADDLE_W, PADDLE_H);
+  ctx.fillRect(W - PADDLE_W, py[1], PADDLE_W, PADDLE_H);
   ctx.fillRect(bx, by, BALL, BALL);
   ctx.font = "48px monospace"; ctx.textAlign = "center";
   ctx.fillText(String(curr.score[0]), W / 4, 60); ctx.fillText(String(curr.score[1]), (3 * W) / 4, 60);

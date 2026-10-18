@@ -3727,7 +3727,7 @@ var import_subprotocol = __toESM(require_subprotocol(), 1);
 var import_websocket = __toESM(require_websocket(), 1);
 var import_websocket_server = __toESM(require_websocket_server(), 1);
 
-// ../pong/core.ts
+// src/core.ts
 var W = 800;
 var H = 500;
 var PADDLE_H = 80;
@@ -3749,14 +3749,9 @@ function serve(s) {
 }
 var clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 function movePaddle(y, inp, dt) {
-  const max = PADDLE_SPEED * dt;
-  let dy = 0;
-  if (typeof inp.targetY === "number" && Number.isFinite(inp.targetY)) {
-    dy = clamp(inp.targetY - PADDLE_H / 2 - y, -max, max);
-  } else if (inp.dir === 1 || inp.dir === -1) {
-    dy = inp.dir * max;
-  }
-  return clamp(y + dy, 0, H - PADDLE_H);
+  if (typeof inp.targetY === "number" && Number.isFinite(inp.targetY)) return clamp(inp.targetY - PADDLE_H / 2, 0, H - PADDLE_H);
+  if (inp.dir === 1 || inp.dir === -1) return clamp(y + inp.dir * PADDLE_SPEED * dt, 0, H - PADDLE_H);
+  return y;
 }
 function step(prev, inputs, dt) {
   const s = structuredClone(prev);
@@ -3819,7 +3814,11 @@ var server = import_node_http.default.createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", "http://x");
   const ip = req.socket.remoteAddress ?? "?";
   if (req.method !== "GET") return json(res, 405, { error: "method" });
-  let p = url.pathname === "/" ? "/index.html" : url.pathname;
+  if (url.pathname === "/pong" || url.pathname === "/snake" || url.pathname === "/incremental") {
+    res.writeHead(301, { location: url.pathname + "/" + url.search });
+    return res.end();
+  }
+  let p = url.pathname.endsWith("/") ? url.pathname + "index.html" : url.pathname;
   const file = import_node_path.default.join(PUBLIC, import_node_path.default.normalize(p).replace(/^(\.\.[/\\])+/, ""));
   if (!file.startsWith(PUBLIC) || !import_node_fs.default.existsSync(file) || import_node_fs.default.statSync(file).isDirectory()) {
     res.writeHead(404);

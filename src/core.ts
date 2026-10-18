@@ -28,14 +28,10 @@ function serve(s: State) {
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
 function movePaddle(y: number, inp: Input, dt: number): number {
-  const max = PADDLE_SPEED * dt;
-  let dy = 0;
-  if (typeof inp.targetY === "number" && Number.isFinite(inp.targetY)) {
-    dy = clamp(inp.targetY - PADDLE_H / 2 - y, -max, max);
-  } else if (inp.dir === 1 || inp.dir === -1) {
-    dy = inp.dir * max;
-  }
-  return clamp(y + dy, 0, H - PADDLE_H);
+  // Touch/cursor: paddle snaps straight to the finger (uncapped, by request).
+  if (typeof inp.targetY === "number" && Number.isFinite(inp.targetY)) return clamp(inp.targetY - PADDLE_H / 2, 0, H - PADDLE_H);
+  if (inp.dir === 1 || inp.dir === -1) return clamp(y + inp.dir * PADDLE_SPEED * dt, 0, H - PADDLE_H);
+  return y;
 }
 
 // Pure: returns a new state. dt should be a fixed step (e.g. 1/60) for determinism.

@@ -3814,7 +3814,7 @@ var server = import_node_http.default.createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", "http://x");
   const ip = req.socket.remoteAddress ?? "?";
   if (req.method !== "GET") return json(res, 405, { error: "method" });
-  if (url.pathname === "/pong" || url.pathname === "/snake" || url.pathname === "/incremental") {
+  if (url.pathname === "/pong" || url.pathname === "/snake" || url.pathname === "/incremental" || url.pathname === "/match3") {
     res.writeHead(301, { location: url.pathname + "/" + url.search });
     return res.end();
   }

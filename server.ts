@@ -59,7 +59,7 @@ const server = http.createServer(async (req, res) => {
   const ip = req.socket.remoteAddress ?? "?";
   if (req.method !== "GET") return json(res, 405, { error: "method" });
   // static
-  if (url.pathname === "/pong" || url.pathname === "/snake" || url.pathname === "/incremental") { res.writeHead(301, { location: url.pathname + "/" + url.search }); return res.end(); }
+  if (url.pathname === "/pong" || url.pathname === "/snake" || url.pathname === "/incremental" || url.pathname === "/match3") { res.writeHead(301, { location: url.pathname + "/" + url.search }); return res.end(); }
   let p = url.pathname.endsWith("/") ? url.pathname + "index.html" : url.pathname;
   const file = path.join(PUBLIC, path.normalize(p).replace(/^(\.\.[/\\])+/, ""));
   if (!file.startsWith(PUBLIC) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) { res.writeHead(404); return res.end("not found"); }

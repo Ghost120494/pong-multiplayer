@@ -27,6 +27,8 @@ Use **one server process/replica** with the configured persistent volume. The JS
 
 The browser never receives the PayPal client secret or access token. No PayPal SDK script is required. Outbound HTTPS must permit `api-m.sandbox.paypal.com` for sandbox or `api-m.paypal.com` for live. Redirect destinations are `www.sandbox.paypal.com` or `www.paypal.com`. Game servers need the API domains; a user's browser needs access to checkout.
 
+Level progress is checkpointed independently on the device. Failed result requests retry in the background; a reservation that no longer belongs to the session is retired without granting a refund or changing another active attempt. The server remembers the latest 100 finished attempt IDs, and optional UUID reservation request IDs make lost start responses safe to retry. Progress backups never import wallet balances, session identities or payment orders. These recovery paths do not replace persistent production wallet storage.
+
 Automated tests use a local HTTP server and a mocked PayPal API; they make no payment requests. They cover attempt consumption/refunds/refills, restart persistence, order ownership, capture idempotency, bad recipient/amount/currency/reference/status, capture recovery, unavailable credentials, and cross-origin/invalid request rejection.
 
 ## Android and iPhone

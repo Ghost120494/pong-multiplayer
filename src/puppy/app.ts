@@ -1,4 +1,7 @@
 import { PuppyGame, LEVELS, BREEDS, type Coord, type Snapshot, type TurnResult } from './engine';
+import { ProgressStore, type ProgressStatus } from './progress-storage';
+
+async function boot() {
 
 const KEY = 'puppy-pals-save-v1';
 const ART = '/puppy-pals/art/';
@@ -10,10 +13,10 @@ const BOOSTERS = {
 } as const;
 type Booster = keyof typeof BOOSTERS;
 type Action = { kind: 'swap'; a: Coord; b: Coord } | { kind: Booster; target?: Coord };
-type Run = { level: number; seed: number; actions: Action[]; attemptId: string | null; mode: 'online' | 'offline' | null; resultHandled: boolean };
+type Run = { level: number; seed: number; actions: Action[]; attemptId: string | null; mode: 'online' | 'offline' | null; resultHandled: boolean; reservationId?: string };
 type OfflineWallet = { lives: number; nextLifeAt: number | null };
-type Save = { version: 1; unlocked: number; stars: number[]; best: number[]; coins: number; boosters: Record<Booster, number>; sound: boolean; dailyAt: number; run: Run | null; offlineWallet: OfflineWallet; pendingFinishes: { attemptId: string; outcome: string }[]; pendingPayment: string | null };
-type Wallet = { lives: number; maxLives: number; nextLifeAt: number | null; paidAttempts: number; totalAttempts: number; paymentsAvailable: boolean; activeAttempt: boolean; activeAttemptId: string | null; pack: { attempts: number; price: string; currency: string } };
+type Save = { version: 1; savedAt?: number; unlocked: number; stars: number[]; best: number[]; coins: number; boosters: Record<Booster, number>; sound: boolean; dailyAt: number; run: Run | null; offlineWallet: OfflineWallet; pendingFinishes: { attemptId: string; outcome: string }[]; pendingPayment: string | null };
+type Wallet = { lives: number; maxLives: number; nextLifeAt: number | null; paidAttempts: number; totalAttempts: number; paymentsAvailable: boolean; activeAttempt: boolean; activeAttemptId: string | null; activeAttemptRequestId?: string | null; pack: { attempts: number; price: string; currency: string } };
 const paths: Record<string, string> = {
   paw: '<ellipse cx="12" cy="16.5" rx="5.5" ry="4.2"/><ellipse cx="5.4" cy="10" rx="2" ry="2.7" transform="rotate(-25 5.4 10)"/><ellipse cx="10" cy="6.3" rx="2" ry="2.7"/><ellipse cx="15.3" cy="6.7" rx="2" ry="2.7"/><ellipse cx="19.5" cy="10.8" rx="2" ry="2.7" transform="rotate(25 19.5 10.8)"/>',
   heart: '<path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z"/>',
@@ -45,31 +48,61 @@ const $ = <T extends HTMLElement = HTMLElement>(selector: string) => document.qu
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, matchMedia('(prefers-reduced-motion: reduce)').matches ? 1 : ms));
 const isNative = () => !!(window as any).Capacitor?.isNativePlatform?.() || ['capacitor:', 'ionic:'].includes(location.protocol);
 
-function load(): Save {
-  const base: Save = { version: 1, unlocked: 1, stars: Array(100).fill(0), best: Array(100).fill(0), coins: 120, boosters: { paw: 2, shuffle: 2, rainbow: 1 }, sound: false, dailyAt: 0, run: null, offlineWallet: { lives: 5, nextLifeAt: null }, pendingFinishes: [], pendingPayment: null };
+function emptySave(): Save {
+  return { version: 1, unlocked: 1, stars: Array(100).fill(0), best: Array(100).fill(0), coins: 120, boosters: { paw: 2, shuffle: 2, rainbow: 1 }, sound: false, dailyAt: 0, run: null, offlineWallet: { lives: 5, nextLifeAt: null }, pendingFinishes: [], pendingPayment: null };
+}
+function validateSave(data: any): Save | null {
+  const base = emptySave();
   try {
-    const data = JSON.parse(localStorage.getItem(KEY) || 'null');
-    if (!data || data.version !== 1) return base;
+    if (!data || data.version !== 1 || typeof data !== 'object') return null;
+    if (!Number.isInteger(data.unlocked) || data.unlocked < 1 || data.unlocked > 100 || !Array.isArray(data.stars) || data.stars.length !== 100 || !Array.isArray(data.best) || data.best.length !== 100) return null;
     const count = (v: unknown, max: number) => Number.isInteger(v) && Number(v) >= 0 ? Math.min(Number(v), max) : 0;
     base.unlocked = Math.max(1, count(data.unlocked, 100));
     base.coins = count(data.coins, 1e6);
     base.sound = !!data.sound;
     base.dailyAt = typeof data.dailyAt === 'number' ? data.dailyAt : 0;
+    if (Number.isFinite(data.savedAt)) base.savedAt = data.savedAt;
     base.stars = base.stars.map((_, i) => count(data.stars?.[i], 3));
     base.best = base.best.map((_, i) => count(data.best?.[i], 1e9));
     for (const kind of Object.keys(BOOSTERS) as Booster[]) base.boosters[kind] = count(data.boosters?.[kind], 999);
     if (data.offlineWallet) base.offlineWallet = { lives: count(data.offlineWallet.lives, 5), nextLifeAt: Number.isFinite(data.offlineWallet.nextLifeAt) ? data.offlineWallet.nextLifeAt : null };
     if (Array.isArray(data.pendingFinishes)) base.pendingFinishes = data.pendingFinishes.filter((x: any) => typeof x.attemptId === 'string' && ['won', 'lost', 'abandoned'].includes(x.outcome)).slice(0, 20);
     if (typeof data.pendingPayment === 'string') base.pendingPayment = data.pendingPayment;
-    if (data.run && Number.isInteger(data.run.level) && data.run.level >= 1 && data.run.level <= base.unlocked && Number.isInteger(data.run.seed) && Array.isArray(data.run.actions) && data.run.actions.length <= 1000) base.run = data.run;
-  } catch { /* Private browsing or an old/corrupt save starts a fresh local adventure. */ }
+    if (data.run != null) {
+      if (!Number.isInteger(data.run.level) || data.run.level < 1 || data.run.level > base.unlocked || !Number.isInteger(data.run.seed) || !Array.isArray(data.run.actions) || data.run.actions.length > 1000) return null;
+      const coordinate = (value: any) => value && Number.isInteger(value.r) && Number.isInteger(value.c) && value.r >= 0 && value.r < 8 && value.c >= 0 && value.c < 8;
+      if (!data.run.actions.every((action: any) => action && (action.kind === 'swap' ? coordinate(action.a) && coordinate(action.b) : action.kind === 'shuffle' || (['paw', 'rainbow'].includes(action.kind) && coordinate(action.target))))) return null;
+      base.run = { level: data.run.level, seed: data.run.seed, actions: data.run.actions, attemptId: typeof data.run.attemptId === 'string' ? data.run.attemptId : null, mode: ['online', 'offline'].includes(data.run.mode) ? data.run.mode : null, resultHandled: !!data.run.resultHandled, ...(typeof data.run.reservationId === 'string' ? { reservationId: data.run.reservationId } : {}) };
+      const replay = new PuppyGame(base.run.level, base.run.seed);
+      for (const action of base.run.actions) {
+        if (!(action.kind === 'swap' ? replay.swap(action.a, action.b) : replay.useBooster(action.kind, action.target)).valid) return null;
+      }
+    }
+  } catch { return null; }
   return base;
 }
-const save = load();
+let appMounted = false;
+let progressStatus: ProgressStatus = { saved: false, savedAt: null, source: null };
+let savingProgress = true;
+let saveGeneration = 0;
+let recoveryNoticeShown = false;
+const progressStore = new ProgressStore<Save>(KEY, validateSave, { onStatus(value) {
+  progressStatus = value;
+  if (appMounted) renderSaveStatus();
+}, onRecovery() {
+  if (appMounted && !recoveryNoticeShown) { recoveryNoticeShown = true; toast('An earlier adventure was recovered. Open Save & restore to review it.'); }
+} });
+const save = await progressStore.restore() || emptySave();
 let storageWarning = false;
 function persist() {
-  try { localStorage.setItem(KEY, JSON.stringify(save)); }
-  catch { if (!storageWarning) { storageWarning = true; toast('Your browser cannot save progress. Keep this tab open to continue.'); } }
+  const generation = ++saveGeneration;
+  savingProgress = true;
+  progressStore.save(save);
+  void progressStore.flush().then(saved => {
+    if (generation !== saveGeneration) return;
+    savingProgress = false; if (appMounted) renderSaveStatus();
+    if (!saved && !storageWarning) { storageWarning = true; toast('A device save could not be confirmed. Use Save & restore to download a backup before closing the game.'); }
+  });
 }
 const seed = () => crypto.getRandomValues(new Uint32Array(1))[0];
 function freshRun(level: number): Run { return { level, seed: seed(), actions: [], attemptId: null, mode: null, resultHandled: false }; }
@@ -96,6 +129,7 @@ let deferredInstall: any = null;
 let audio: AudioContext | null = null;
 let toastTimer: ReturnType<typeof setTimeout>;
 let suppressNextPointerClick = false;
+let importedProgress: Save | null = null;
 let artworkReady = false;
 type TileView = { button: HTMLButtonElement; image?: HTMLImageElement; rainbow?: HTMLSpanElement; badge?: HTMLSpanElement };
 const tileViews: TileView[] = [];
@@ -138,6 +172,7 @@ function shell() {
       <nav class="nav-links"><button class="nav-button active" data-action="play">${icon('paw')}<span class="nav-label">Let's play</span></button><button class="nav-button" data-action="map">${icon('map')}<span class="nav-label">My adventure</span><span class="tiny-pill">100 levels</span></button><button class="nav-button" data-action="shop">${icon('bag')}<span class="nav-label">Treat shop</span></button></nav>
       <section class="adventure-card" id="sidebar-map" aria-label="Level map"></section>
       <section class="install-card"><h3>${icon('phone')}Your happy place, anywhere.</h3><p>Add Puppy Pals to your home screen for a little joy on the go.</p><button class="text-button" data-action="install">Get the app ${icon('chevron')}</button></section>
+      <button class="nav-button" data-action="progress">${icon('cloud')}<span class="nav-label">Save & restore</span></button>
       <div class="sidebar-footer">A little kindness. A lot of puppies.<br><a href="/privacy.html">Privacy & your progress</a></div>
     </aside>
     <section class="game-column" aria-label="Puppy Pals game">
@@ -150,7 +185,7 @@ function shell() {
         <div class="game-bottom"><div><span class="score-label">YOUR SCORE</span><strong class="score-value" id="score">0</strong></div><button class="hint-button" data-action="hint">${icon('bulb')} A little hint</button></div>
       </section>
       <div class="booster-panel" aria-label="Boosters"><div class="booster-label">A little<br>helping paw</div>${(Object.entries(BOOSTERS) as [Booster, typeof BOOSTERS[Booster]][]).map(([kind, info]) => `<button class="booster" data-action="booster" data-booster="${kind}" title="${esc(info.description)}"><span class="booster-icon ${kind}">${icon(kind)}</span><span class="booster-name">${info.name}</span><span class="booster-count" id="count-${kind}">${save.boosters[kind]}</span></button>`).join('')}</div>
-      <div class="game-footer">${icon('cloud')}Little wins, saved automatically.<span id="connection" class="connection-status"><span class="connection-dot"></span>Connecting</span></div>
+      <div class="game-footer"><button id="save-status" class="save-status" data-action="progress">${icon('cloud')}Saving progress…</button><span id="connection" class="connection-status"><span class="connection-dot"></span>Connecting</span></div>
       <nav class="mobile-bottom" aria-label="Game menu"><button data-action="map">${icon('map')}Adventure</button><button data-action="help">${icon('help')}How to play</button><button data-action="sound" class="sound-toggle">${icon('mute')}Sound</button><button data-action="restart">${icon('reset')}Restart</button></nav>
     </section>
     <aside class="rightbar" aria-label="Your puppy pack">
@@ -160,6 +195,14 @@ function shell() {
       <button class="daily-button" data-action="daily">${icon('gift')}<div><strong id="daily-label">Your daily little treat</strong><span id="daily-detail">50 treat coins + a free shuffle</span></div></button>
     </aside>
   </main>`;
+}
+function renderSaveStatus() {
+  const button = document.querySelector<HTMLButtonElement>('#save-status');
+  if (!button) return;
+  const text = progressStatus.saved ? 'Progress saved on this device' : savingProgress ? 'Saving progress…' : 'Save unavailable · download a backup';
+  button.innerHTML = `${icon('cloud')}<span>${text}</span>`;
+  button.dataset.saved = String(progressStatus.saved);
+  button.title = progressStatus.savedAt ? `Last saved ${new Date(progressStatus.savedAt).toLocaleString()}. Open Save & restore for a backup.` : 'Open Save & restore to download a backup.';
 }
 function mapHtml() {
   const start = (chapter - 1) * 10;
@@ -176,10 +219,12 @@ function renderMap() {
 }
 function renderWallet() {
   const offline = localWallet();
-  const total = connected && wallet ? wallet.totalAttempts : offline.lives;
+  const usingOffline = !connected || run.mode === 'offline';
+  const total = !usingOffline && wallet ? wallet.totalAttempts : offline.lives;
   $('#lives').textContent = String(total);
   $('#coins').textContent = fmt(save.coins);
-  $('#connection').innerHTML = `<span class="connection-dot ${connected ? '' : 'offline'}"></span>${connected ? 'Progress saved' : 'Offline play'}`;
+  $('#connection').innerHTML = `<span class="connection-dot ${usingOffline ? 'offline' : ''}"></span>${usingOffline ? 'Offline play' : 'Online'}`;
+  renderSaveStatus();
   for (const kind of Object.keys(BOOSTERS) as Booster[]) {
     $(`#count-${kind}`).textContent = String(save.boosters[kind]);
     const button = document.querySelector<HTMLButtonElement>(`.booster[data-booster="${kind}"]`)!;
@@ -284,30 +329,49 @@ function localWallet() {
   }
   return state;
 }
-class ApiError extends Error { constructor(message: string, public code: number) { super(message); } }
+class ApiError extends Error { constructor(message: string, public code: number, public reasonCode?: string, public wallet?: Wallet) { super(message); } }
 async function api(route: string, payload?: unknown, long = false): Promise<any> {
   const response = await fetch('/api/puppy/' + route, {
     credentials: 'same-origin', cache: 'no-store',
     ...(payload === undefined ? {} : { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) }),
-    signal: AbortSignal.timeout(long ? 75000 : 8000),
+    signal: AbortSignal.timeout(long ? 75000 : route === 'state' ? 3500 : 8000),
   });
   const data = await response.json();
-  if (!response.ok) throw new ApiError(data.error || 'Something went wrong. Please try again.', response.status);
+  if (!response.ok) throw new ApiError(data.error || 'Something went wrong. Please try again.', response.status, data.code, data.wallet);
   return data;
 }
 let walletRefreshInFlight: Promise<void> | null = null;
+let nextSyncAt = 0;
+let syncFailures = 0;
+function deferSync() {
+  connected = false;
+  nextSyncAt = Date.now() + Math.min(60000, 5000 * 2 ** Math.min(syncFailures++, 4));
+}
+function removePending(attemptId: string) {
+  save.pendingFinishes = save.pendingFinishes.filter(item => item.attemptId !== attemptId); persist();
+}
 function refreshWallet(): Promise<void> {
   if (walletRefreshInFlight) return walletRefreshInFlight;
   walletRefreshInFlight = (async () => {
     try {
-      wallet = await api('state'); connected = true;
+      wallet = await api('state');
+      connected = !save.pendingFinishes.length;
       for (const pending of [...save.pendingFinishes]) {
+        // A redeploy, replaced session, or another completed level can retire an
+        // old reservation. Never let it block local play or refund a newer one.
+        if (wallet!.activeAttemptId !== pending.attemptId) { removePending(pending.attemptId); continue; }
         try {
           wallet = await api('attempt/finish', pending);
-          save.pendingFinishes = save.pendingFinishes.filter(item => item.attemptId !== pending.attemptId); persist();
-        } catch { /* Keep pending completions until the server can confirm them. */ }
+          removePending(pending.attemptId);
+        } catch (error) {
+          if (error instanceof ApiError && ['ATTEMPT_NOT_FOUND', 'ATTEMPT_MISMATCH'].includes(error.reasonCode || '') && error.wallet && error.wallet.activeAttemptId !== pending.attemptId) {
+            wallet = error.wallet; removePending(pending.attemptId); continue;
+          }
+          deferSync(); return;
+        }
       }
-    } catch { connected = false; }
+      connected = true; syncFailures = 0; nextSyncAt = Date.now() + 30000;
+    } catch { deferSync(); }
     finally { renderWallet(); walletRefreshInFlight = null; }
   })();
   return walletRefreshInFlight;
@@ -315,24 +379,28 @@ function refreshWallet(): Promise<void> {
 let ready: Promise<void>;
 async function ensureAttempt(): Promise<boolean> {
   await ready;
-  if (run.attemptId) return true;
-  if (connected && save.pendingFinishes.length) {
-    await refreshWallet();
-    if (connected && save.pendingFinishes.length) {
-      toast('Your last result is still syncing. Please try again in a moment.');
-      return false;
-    }
+  if (run.attemptId) {
+    if (run.mode === 'offline' || !connected || wallet?.activeAttemptId === run.attemptId) return true;
+    // Keep the saved board when the server has restarted or lost the old session.
+    run.attemptId = null; run.mode = null; delete run.reservationId; persist();
   }
-  if (connected && wallet) {
+  if (connected && save.pendingFinishes.length) await refreshWallet();
+  if (connected && wallet && (!wallet.activeAttemptId || (!!run.reservationId && wallet.activeAttemptRequestId === run.reservationId))) {
+    run.reservationId ||= crypto.randomUUID(); persist();
     try {
-      if (wallet.activeAttemptId) run.attemptId = wallet.activeAttemptId;
-      else { wallet = await api('attempt/start', {}); run.attemptId = wallet.activeAttemptId || (wallet as any).attemptId; }
+      if (wallet.activeAttemptId && wallet.activeAttemptRequestId === run.reservationId) run.attemptId = wallet.activeAttemptId;
+      else { wallet = await api('attempt/start', { requestId: run.reservationId }); run.attemptId = wallet.activeAttemptId || (wallet as any).attemptId; }
       run.mode = 'online';
     } catch (error) {
-      if (error instanceof ApiError && error.code === 409) { await refreshWallet(); if (wallet?.activeAttemptId) { run.attemptId = wallet.activeAttemptId; run.mode = 'online'; } }
+      if (error instanceof ApiError && error.wallet) wallet = error.wallet;
+      if (error instanceof ApiError && error.code === 409 && wallet?.activeAttemptRequestId === run.reservationId && wallet.activeAttemptId) { run.attemptId = wallet.activeAttemptId; run.mode = 'online'; }
       if (!run.attemptId) {
-        if (error instanceof ApiError && (error.code === 402 || (error.code === 409 && !wallet?.totalAttempts))) showShop();
-        else { toast(error instanceof Error ? error.message : 'Cannot start this attempt. Try again.'); await refreshWallet(); }
+        if (error instanceof ApiError && (error.reasonCode === 'NO_ATTEMPTS' || error.code === 402 || (error.code === 409 && !wallet?.totalAttempts))) showShop();
+        else {
+          await refreshWallet();
+          if (wallet?.activeAttemptRequestId === run.reservationId && wallet.activeAttemptId) { run.attemptId = wallet.activeAttemptId; run.mode = 'online'; persist(); renderWallet(); return true; }
+          toast('The connection dropped. Your progress is safe; try your move again.');
+        }
         return false;
       }
     }
@@ -351,13 +419,12 @@ async function finishAttempt(outcome: 'won' | 'lost' | 'abandoned') {
     const pending = { attemptId, outcome };
     if (!save.pendingFinishes.some(item => item.attemptId === attemptId)) save.pendingFinishes.push(pending);
     persist();
-    try { wallet = await api('attempt/finish', pending); connected = true; save.pendingFinishes = save.pendingFinishes.filter(item => item.attemptId !== attemptId); }
-    catch { toast('Your result is saved. We’ll sync your attempt when you reconnect.'); }
   } else if (outcome === 'won') {
     save.offlineWallet.lives = Math.min(5, localWallet().lives + 1);
     if (save.offlineWallet.lives === 5) save.offlineWallet.nextLifeAt = null;
   }
-  run.attemptId = null; persist(); renderWallet();
+  run.attemptId = null; delete run.reservationId; persist(); renderWallet();
+  if (save.pendingFinishes.length) void refreshWallet();
 }
 async function animate(result: TurnResult) {
   let lastCombo = 0;
@@ -483,6 +550,66 @@ function updateShopCountdown() {
   else if (next) { const seconds = Math.max(0, Math.ceil((next - Date.now()) / 1000)); el.textContent = `Next free life in ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}` + paid; }
 }
 function showMap() { showModal('map', '<h2>Your happy little journey.</h2><p class="modal-subtitle">100 levels. Six best friends. A whole lot of love.</p><div class="map-modal" id="modal-map"></div>', true); renderMap(); }
+function showProgress() {
+  const completed = save.stars.filter(Boolean).length;
+  const savedTime = progressStatus.savedAt ? new Date(progressStatus.savedAt).toLocaleString() : 'Saving your latest move';
+  showModal('progress', `<img class="modal-hero" src="${ART}dog-2.svg" alt="Husky"><h2>${progressStatus.saved ? 'Your adventure, saved.' : 'Keep your adventure safe.'}</h2><p class="modal-subtitle">Your level, stars, coins, boosters and current board save automatically on this device after each move, even when you’re offline.</p><div class="result-stats"><div><strong>${completed}</strong><span>LEVELS COMPLETE</span></div><div><strong>${run.level}</strong><span>CURRENT LEVEL</span></div></div><p class="modal-note" id="progress-save-detail">${progressStatus.saved ? 'Saved on this device: ' + esc(savedTime) : 'A device save has not been confirmed. Download a copy before closing the game.'}</p><button class="primary-button" data-action="download-progress" style="margin-top:20px">${icon('cloud')}Download a backup</button><button class="secondary-button" data-action="import-progress">Restore a backup</button><input id="progress-file" type="file" accept="application/json,.json" hidden><div id="recovered-progress"></div><p class="modal-note">Keep a backup to move your adventure to another device or recover it after clearing browser data. Purchased attempts stay with your browser’s wallet and are not part of this file.</p>`);
+  void progressStore.recovery().then(data => {
+    const recovered = validateSave(data);
+    if (recovered && modalKind === 'progress') $('#recovered-progress').innerHTML = `<button class="secondary-button" data-action="recover-progress">Review earlier level ${recovered.run?.level || recovered.unlocked} save</button><p class="modal-note">An earlier checkpoint was kept safe when device storage was temporarily unavailable.</p>`;
+  });
+}
+function portableSave(): Save {
+  const data: Save = JSON.parse(JSON.stringify(save));
+  data.pendingFinishes = []; data.pendingPayment = null;
+  if (data.run) { data.run.attemptId = null; data.run.mode = null; delete data.run.reservationId; }
+  return data;
+}
+function downloadProgress() {
+  persist();
+  const content = JSON.stringify({ format: 'puppy-pals-save', version: 1, progress: portableSave() }, null, 2);
+  const url = URL.createObjectURL(new Blob([content], { type: 'application/json' }));
+  const link = document.createElement('a'); link.href = url; link.download = `puppy-pals-level-${run.level}.json`;
+  document.body.append(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+function restoredGame(profile: Save): { run: Run; game: PuppyGame } {
+  const restoredRun = profile.run || freshRun(profile.unlocked);
+  const restored = new PuppyGame(restoredRun.level, restoredRun.seed);
+  for (const action of restoredRun.actions) {
+    const result = action.kind === 'swap' ? restored.swap(action.a, action.b) : restored.useBooster(action.kind, action.target);
+    if (!result.valid) throw new Error('This backup contains a move that cannot be restored. Your current game is safe.');
+  }
+  return { run: restoredRun, game: restored };
+}
+async function readProgressFile(file: File) {
+  try {
+    if (file.size > 1024 * 1024) throw new Error('Choose a Puppy Pals backup smaller than 1 MB.');
+    const data = JSON.parse(await file.text());
+    const profile = validateSave(data.format === 'puppy-pals-save' ? data.progress : data);
+    if (!profile) throw new Error('This file is not a valid Puppy Pals backup.');
+    if (profile.run) { profile.run.attemptId = null; profile.run.mode = null; delete profile.run.reservationId; }
+    profile.pendingFinishes = []; profile.pendingPayment = null;
+    restoredGame(profile);
+    importedProgress = profile;
+    showModal('restore', `<img class="modal-hero" src="${ART}dog-1.svg" alt="Beagle"><h2>Bring your pals back?</h2><p class="modal-subtitle">This backup has ${profile.stars.filter(Boolean).length} completed levels and resumes at level ${profile.run?.level || profile.unlocked}. It replaces this device’s game progress.</p><button class="primary-button" data-action="confirm-import">Restore this adventure</button><button class="secondary-button" data-action="close">Keep my current game</button><p class="modal-note">Your purchased attempts stay unchanged.${run.attemptId && !displayed.won && !displayed.lost ? ' Replacing your unfinished game will use its current attempt.' : ''}</p>`);
+  } catch (error) { toast(error instanceof Error ? error.message : 'This backup could not be read. Your current game is safe.'); }
+}
+async function importProgress() {
+  if (!importedProgress || busy) return;
+  busy = true;
+  let finished = false;
+  try {
+    const recovered = restoredGame(importedProgress);
+    if (run.attemptId) await finishAttempt('abandoned');
+    const keep = { offlineWallet: save.offlineWallet, pendingFinishes: save.pendingFinishes, pendingPayment: save.pendingPayment };
+    Object.assign(save, importedProgress, keep);
+    run = recovered.run; game = recovered.game; save.run = run;
+    selected = null; activeBooster = null; chapter = game.level.chapter; importedProgress = null;
+    persist(); closeModal(); renderAll(); status('Welcome back! Your puppy adventure is restored.', true);
+    finished = displayed.won || displayed.lost;
+  } finally { busy = false; renderAll(); }
+  if (finished) await checkResult();
+}
 async function purchase() {
   if (isNative() || !wallet?.paymentsAvailable || busy) return;
   const button = document.querySelector<HTMLButtonElement>('[data-action="purchase"]'); if (button) { button.disabled = true; button.textContent = 'Opening secure checkout…'; }
@@ -520,6 +647,13 @@ document.addEventListener('click', event => {
   const button = (event.target as Element).closest<HTMLElement>('[data-action]'); if (!button || button.hasAttribute('disabled')) return;
   const action = button.dataset.action;
   if (action === 'close') closeModal();
+  else if (action === 'progress') showProgress();
+  else if (action === 'download-progress') downloadProgress();
+  else if (action === 'import-progress') document.querySelector<HTMLInputElement>('#progress-file')?.click();
+  else if (action === 'recover-progress') void progressStore.recovery().then(data => {
+    if (data) return readProgressFile(new File([JSON.stringify({ format: 'puppy-pals-save', version: 1, progress: data })], 'puppy-pals-recovered.json', { type: 'application/json' }));
+  });
+  else if (action === 'confirm-import') void importProgress();
   else if (action === 'help') showHelp();
   else if (action === 'shop') showShop();
   else if (action === 'map') showMap();
@@ -546,6 +680,10 @@ document.addEventListener('click', event => {
   else if (action === 'check-payment' && save.pendingPayment) void capture(save.pendingPayment);
   else if (action === 'install') void install();
 });
+document.addEventListener('change', event => {
+  const input = event.target as HTMLInputElement;
+  if (input.id === 'progress-file' && input.files?.[0]) void readProgressFile(input.files[0]);
+});
 document.addEventListener('keydown', event => {
   if (event.key === 'Escape') { closeModal(); selected = null; activeBooster = null; renderBoard(displayed); renderWallet(); }
   const modal = document.querySelector('.modal');
@@ -559,7 +697,7 @@ window.addEventListener('beforeinstallprompt', event => { event.preventDefault()
 window.addEventListener('online', () => { void refreshWallet(); });
 window.addEventListener('offline', () => { connected = false; renderWallet(); });
 
-shell(); renderAll(); status('Tap two neighbors or swipe. Match three to make new pals.');
+shell(); appMounted = true; renderAll(); status('Tap two neighbors or swipe. Match three to make new pals.');
 void prepareArtwork();
 const board = $('#board');
 board.addEventListener('click', event => {
@@ -613,8 +751,20 @@ void ready.then(async () => {
 });
 setInterval(() => {
   updateShopCountdown();
-  if (connected && wallet?.nextLifeAt && Date.now() >= wallet.nextLifeAt) void refreshWallet();
+  if (Date.now() >= nextSyncAt && (!connected || save.pendingFinishes.length || (wallet?.nextLifeAt && Date.now() >= wallet.nextLifeAt))) void refreshWallet();
   else if (!connected) { localWallet(); renderWallet(); }
 }, 1000);
-if ('serviceWorker' in navigator && !isNative()) window.addEventListener('load', () => { void navigator.serviceWorker.register('/sw.js').catch(() => {}); });
+if ('serviceWorker' in navigator && !isNative()) {
+  const register = () => { void navigator.serviceWorker.register('/sw.js').catch(() => {}); };
+  if (document.readyState === 'complete') register(); else window.addEventListener('load', register, { once: true });
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') persist(); });
+window.addEventListener('pagehide', () => { persist(); });
 persist();
+}
+
+void boot().catch(() => {
+  const app = document.querySelector('#app');
+  if (app) app.innerHTML = '<div class="loading-screen"><h1>Puppy Pals</h1><p>Your saved progress has not been deleted. Please reload to try opening the game again.</p><button class="primary-button" id="retry-startup">Reload game</button></div>';
+  document.querySelector('#retry-startup')?.addEventListener('click', () => location.reload());
+});

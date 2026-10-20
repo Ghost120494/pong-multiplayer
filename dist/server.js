@@ -3797,14 +3797,19 @@ var import_node_os = __toESM(require("node:os"));
 var import_node_crypto = __toESM(require("node:crypto"));
 var MAX_LIVES = 5;
 var REFILL_MS = 30 * 60 * 1e3;
+var FINISHED_ATTEMPT_LIMIT = 100;
 var ATTEMPT_PACK = Object.freeze({ attempts: 5, price: "0.99", currency: "USD" });
 var PAYPAL_MERCHANT_EMAIL = "jasonwilliams1204@gmail.com";
 var ApiError = class extends Error {
-  constructor(status, message) {
+  constructor(status, message, code, wallet) {
     super(message);
     this.status = status;
+    this.code = code;
+    this.wallet = wallet;
   }
   status;
+  code;
+  wallet;
 };
 var Store = class {
   file;
@@ -3818,6 +3823,11 @@ var Store = class {
     this.data = import_node_fs.default.existsSync(this.file) ? JSON.parse(import_node_fs.default.readFileSync(this.file, "utf8")) : { version: 1, wallets: {}, orders: {}, captures: {} };
     if (this.data.version !== 1 || !this.data.wallets || !this.data.orders || !this.data.captures) {
       throw new Error("Unsupported Puppy Pals wallet store. Preserve the data and restore a valid backup.");
+    }
+    for (const wallet of Object.values(this.data.wallets)) {
+      const finished = Array.isArray(wallet.finishedAttempts) ? wallet.finishedAttempts.filter((id) => typeof id === "string") : [];
+      if (typeof wallet.lastFinished === "string") finished.push(wallet.lastFinished);
+      wallet.finishedAttempts = [...new Set(finished)].slice(-FINISHED_ATTEMPT_LIMIT);
     }
     this.committed = structuredClone(this.data);
   }
@@ -3922,15 +3932,20 @@ function createPuppyApi(options = {}) {
       pack: ATTEMPT_PACK,
       activeAttempt: !!wallet.active,
       activeAttemptId: wallet.active?.id ?? null,
-      activeAttemptStartedAt: wallet.active?.startedAt ?? null
+      activeAttemptStartedAt: wallet.active?.startedAt ?? null,
+      activeAttemptRequestId: wallet.active?.requestId ?? null
     };
+  }
+  function attemptConflict(wallet, code, message) {
+    store.save();
+    throw new ApiError(409, message, code, state(wallet));
   }
   function session(req, res) {
     const supplied = new RegExp(`(?:^|;\\s*)${cookieName}=([a-f0-9]{64})(?:;|$)`).exec(req.headers.cookie ?? "")?.[1];
     let id = supplied && Object.hasOwn(store.data.wallets, supplied) ? supplied : void 0;
     if (!id) {
       id = import_node_crypto.default.randomBytes(32).toString("hex");
-      store.data.wallets[id] = { lives: MAX_LIVES, refillAt: null, paidAttempts: 0, active: null };
+      store.data.wallets[id] = { lives: MAX_LIVES, refillAt: null, paidAttempts: 0, active: null, finishedAttempts: [] };
       res.setHeader("set-cookie", `${cookieName}=${id}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000${production ? "; Secure" : ""}`);
     }
     const wallet = store.data.wallets[id];
@@ -4036,15 +4051,24 @@ function createPuppyApi(options = {}) {
           return;
         }
         if (route === "/api/puppy/attempt/start" && req.method === "POST") {
-          if (wallet.active) throw new ApiError(409, "A level is already in progress. Finish it before starting another.");
-          if (wallet.lives + wallet.paidAttempts <= 0) throw new ApiError(409, "You are out of attempts. Your next free life will refill soon.");
+          const requestId = input.requestId;
+          if (requestId !== void 0 && (typeof requestId !== "string" || !/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(requestId))) {
+            throw new ApiError(400, "A valid reservation request ID is required.", "INVALID_REQUEST_ID");
+          }
+          if (wallet.active && requestId && wallet.active.requestId === requestId) {
+            store.save();
+            send(res, 200, { ...state(wallet), attemptId: wallet.active.id });
+            return;
+          }
+          if (wallet.active) attemptConflict(wallet, "ATTEMPT_ACTIVE", "A level is already in progress. Finish it before starting another.");
+          if (wallet.lives + wallet.paidAttempts <= 0) attemptConflict(wallet, "NO_ATTEMPTS", "You are out of attempts. Your next free life will refill soon.");
           const source = wallet.lives > 0 ? "life" : "paid";
           if (source === "life") {
             wallet.lives--;
             if (wallet.refillAt === null) wallet.refillAt = now() + REFILL_MS;
           } else wallet.paidAttempts--;
           const attemptId = import_node_crypto.default.randomUUID();
-          wallet.active = { id: attemptId, source, startedAt: now() };
+          wallet.active = { id: attemptId, source, startedAt: now(), ...requestId ? { requestId } : {} };
           store.save();
           send(res, 200, { ...state(wallet), attemptId });
           return;
@@ -4052,15 +4076,15 @@ function createPuppyApi(options = {}) {
         if (route === "/api/puppy/attempt/finish" && req.method === "POST") {
           const attemptId = input.attemptId;
           if (typeof attemptId !== "string" || !["won", "lost", "abandoned"].includes(String(input.outcome))) throw new ApiError(400, "A valid level result is required.");
-          if (!wallet.active) {
-            if (wallet.lastFinished === attemptId) {
-              store.save();
-              send(res, 200, state(wallet));
-              return;
-            }
-            throw new ApiError(409, "This attempt is no longer active.");
+          if (wallet.lastFinished === attemptId || wallet.finishedAttempts?.includes(attemptId)) {
+            store.save();
+            send(res, 200, state(wallet));
+            return;
           }
-          if (wallet.active.id !== attemptId) throw new ApiError(409, "This attempt belongs to another level.");
+          if (!wallet.active) {
+            attemptConflict(wallet, "ATTEMPT_NOT_FOUND", "This attempt is no longer active.");
+          }
+          if (wallet.active.id !== attemptId) attemptConflict(wallet, "ATTEMPT_MISMATCH", "This attempt belongs to another level.");
           if (input.outcome === "won") {
             if (wallet.active.source === "paid") wallet.paidAttempts++;
             else {
@@ -4069,6 +4093,7 @@ function createPuppyApi(options = {}) {
             }
           }
           wallet.lastFinished = wallet.active.id;
+          wallet.finishedAttempts = [...wallet.finishedAttempts ?? [], wallet.active.id].slice(-FINISHED_ATTEMPT_LIMIT);
           wallet.active = null;
           store.save();
           send(res, 200, state(wallet));
@@ -4141,7 +4166,11 @@ function createPuppyApi(options = {}) {
       });
     } catch (error) {
       const status = error instanceof ApiError ? error.status : 500;
-      send(res, status, { error: error instanceof ApiError ? error.message : "Puppy Pals could not save your request. Please retry." });
+      send(res, status, {
+        error: error instanceof ApiError ? error.message : "Puppy Pals could not save your request. Please retry.",
+        ...error instanceof ApiError && error.code ? { code: error.code } : {},
+        ...error instanceof ApiError && error.wallet ? { wallet: error.wallet } : {}
+      });
     }
     return true;
   };

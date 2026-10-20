@@ -11,7 +11,8 @@
     "test": "node scripts/build.mjs test",
     "cap:sync": "npm run build:mobile && cap sync",
     "test:browser": "node tests/browser-smoke.mjs",
-    "test:loading": "node tests/board-loading.browser.mjs"
+    "test:loading": "node tests/board-loading.browser.mjs",
+    "test:sync": "node tests/sync-progress.browser.mjs"
   },
   "keywords": [],
   "author": "",

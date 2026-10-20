@@ -31,7 +31,7 @@ const boardState = page => page.locator('.tile').evaluateAll(tiles => tiles.map(
 async function idle(page) { await page.waitForSelector('#board[aria-busy="false"]', { timeout: 15000 }); }
 async function ready(page) {
   await page.waitForSelector('.tile');
-  await page.waitForFunction(() => document.querySelector('#connection')?.textContent.includes('Progress saved') || document.querySelector('#connection')?.textContent.includes('Offline play'));
+  await page.waitForFunction(() => document.querySelector('#connection')?.textContent.includes('Online') || document.querySelector('#connection')?.textContent.includes('Offline play'));
   await idle(page);
   assert.equal(await page.locator('.tile').count(), 64);
   assert(await page.locator('#board img').evaluateAll(images => images.every(image => image.complete && image.naturalWidth > 0)), 'all board sprites load');

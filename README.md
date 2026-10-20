@@ -15,6 +15,8 @@ For optional browser QA, with Playwright and Chromium available, start the serve
 
 `npm run test:loading` checks slow artwork loading, stable board cells during matches/refills, and exact saved-board restoration with normal and reduced motion. It uses the same browser prerequisites and `PUPPY_BASE_URL` override (default port 8080).
 
+`npm run test:sync` checks interrupted requests, stale server sessions, safe retries, offline level completion, storage failure recovery and downloadable backup restoration.
+
 Puppy Pals is the home page. Existing Pong, Snake and Incremental games remain available at `/pong/`, `/snake/` and `/incremental/`. The original match-3 route redirects to Puppy Pals.
 
 PayPal packs cost **$0.99 USD for five attempts**, payable to `jasonwilliams1204@gmail.com`. Checkout remains unavailable until the merchant's PayPal app credentials, public return origin and persistent wallet storage are configured. Payments are verified on the server before attempts are credited; no card information is stored by the game.
@@ -23,4 +25,8 @@ See [PayPal setup](docs/paypal.md) and [web/native publishing](docs/publishing.m
 
 For local sandbox configuration, copy `.env.example` to the ignored `.env` file, supply your own merchant app credentials privately, and run `node --env-file=.env dist/server.js` with Node 20.20 or newer. `npm start` reads variables already supplied by the hosting environment; it does not load `.env` automatically. Free gameplay works without any PayPal credentials.
 
-Progress is stored on your device. Online attempts and purchases use a persistent, anonymous browser wallet; keep its cookies to keep access to paid attempts. The current version does not offer accounts or cross-device purchase recovery.
+Progress saves automatically after every move, including completed levels, stars, coins, boosters and the current board. It uses a primary device save, a backup copy and an IndexedDB mirror. The footer reports actual device-save status separately from the server connection. Open **Save & restore** to download a JSON backup or restore one on another device. If storage was temporarily unavailable, an earlier recovered checkpoint can also be reviewed there before replacing your current game. Backup files do not transfer purchased attempts or server-session identities.
+
+Interrupted result requests retry in the background. Retired reservations are discarded without awarding credit, so an old session from a server restart cannot permanently block gameplay. New attempt reservations use an idempotency ID to avoid charging another life when a response is lost. Free offline play remains available while the server is unavailable; payments always require server verification.
+
+Online attempts and purchases use a persistent, anonymous browser wallet; keep its cookies to keep access to paid attempts. The current version does not offer accounts or automatic cloud sync across devices. Clearing all browser data removes device saves unless you have downloaded a backup.

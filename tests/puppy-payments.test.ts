@@ -98,6 +98,144 @@ test("free attempts are consumed, active attempts cannot duplicate, and winning 
   assert.equal((await player.request("attempt/finish", { attemptId: started.body.attemptId, outcome: "won" })).body.lives, 5);
 });
 
+test("a missing old attempt returns a terminal code and a durable current wallet", async t => {
+  const f = await fixture(t);
+  const player = f.client();
+  const missing = await player.request("attempt/finish", { attemptId: "old-attempt-before-redeploy", outcome: "won" });
+  assert.equal(missing.status, 409);
+  assert.equal(missing.body.code, "ATTEMPT_NOT_FOUND");
+  assert.equal(missing.body.wallet.lives, 5);
+  assert.equal(missing.body.wallet.paidAttempts, 0);
+  assert.equal(missing.body.wallet.activeAttemptId, null);
+  const following = await player.request("state");
+  assert.equal(following.headers.get("set-cookie"), null, "the conflict must not discard its newly created session");
+  assert.equal(following.body.lives, 5);
+});
+
+test("attempt conflicts identify the current reservation without granting a refund", async t => {
+  const f = await fixture(t);
+  const player = f.client();
+  const started = await player.request("attempt/start", {});
+  const duplicateStart = await player.request("attempt/start", {});
+  assert.equal(duplicateStart.status, 409);
+  assert.equal(duplicateStart.body.code, "ATTEMPT_ACTIVE");
+  assert.equal(duplicateStart.body.wallet.activeAttemptId, started.body.attemptId);
+  const mismatch = await player.request("attempt/finish", { attemptId: "another-attempt", outcome: "won" });
+  assert.equal(mismatch.status, 409);
+  assert.equal(mismatch.body.code, "ATTEMPT_MISMATCH");
+  assert.equal(mismatch.body.wallet.activeAttemptId, started.body.attemptId);
+  assert.equal(mismatch.body.wallet.lives, 4);
+  assert.equal(mismatch.body.wallet.paidAttempts, 0);
+  assert.equal((await player.request("state")).body.activeAttemptId, started.body.attemptId);
+});
+
+test("a reservation request retries the same active attempt once, including after restart", async t => {
+  const f = await fixture(t);
+  const player = f.client();
+  const requestId = "fe5c5b1d-4aa9-4a63-93bc-d46af6a94d10";
+  assert.equal((await player.request("state")).body.activeAttemptRequestId, null);
+  const first = await player.request("attempt/start", { requestId });
+  assert.equal(first.status, 200);
+  assert.equal(first.body.lives, 4);
+  assert.equal(first.body.activeAttemptRequestId, requestId);
+  const retry = await player.request("attempt/start", { requestId });
+  assert.equal(retry.status, 200);
+  assert.equal(retry.body.attemptId, first.body.attemptId);
+  assert.equal(retry.body.lives, 4);
+  f.reopen();
+  const restored = await player.request("state");
+  assert.equal(restored.body.activeAttemptRequestId, requestId);
+  const afterRestart = await player.request("attempt/start", { requestId });
+  assert.equal(afterRestart.status, 200);
+  assert.equal(afterRestart.body.attemptId, first.body.attemptId);
+  assert.equal(afterRestart.body.lives, 4);
+  const other = await player.request("attempt/start", { requestId: "4f7650b4-3749-4082-a631-904de15b9c94" });
+  assert.equal(other.status, 409);
+  assert.equal(other.body.code, "ATTEMPT_ACTIVE");
+  assert.equal(other.body.wallet.activeAttemptRequestId, requestId);
+  assert.equal(other.body.wallet.lives, 4);
+  assert.equal((await player.request("attempt/start", {})).status, 409, "legacy duplicate requests still conflict");
+  await player.request("attempt/finish", { attemptId: first.body.attemptId, outcome: "lost" });
+  assert.equal((await player.request("state")).body.activeAttemptRequestId, null);
+});
+
+test("invalid reservation request IDs cannot consume an attempt", async t => {
+  const f = await fixture(t);
+  const player = f.client();
+  await player.request("state");
+  for (const requestId of [null, 7, "", "arbitrary", "x".repeat(400)]) {
+    const response = await player.request("attempt/start", { requestId });
+    assert.equal(response.status, 400);
+    assert.equal(response.body.code, "INVALID_REQUEST_ID");
+  }
+  const state = await player.request("state");
+  assert.equal(state.body.lives, 5);
+  assert.equal(state.body.activeAttemptId, null);
+});
+
+test("older finished results can retry after later levels without touching the active attempt", async t => {
+  const f = await fixture(t);
+  const player = f.client();
+  const first = await player.request("attempt/start", {});
+  await player.request("attempt/finish", { attemptId: first.body.attemptId, outcome: "lost" });
+  const second = await player.request("attempt/start", {});
+  await player.request("attempt/finish", { attemptId: second.body.attemptId, outcome: "abandoned" });
+  const third = await player.request("attempt/start", {});
+  assert.equal(third.body.lives, 2);
+  f.reopen();
+  for (const attemptId of [first.body.attemptId, second.body.attemptId]) {
+    const retry = await player.request("attempt/finish", { attemptId, outcome: "won" });
+    assert.equal(retry.status, 200);
+    assert.equal(retry.body.activeAttemptId, third.body.attemptId);
+    assert.equal(retry.body.lives, 2, "a changed result cannot refund an old lost attempt");
+    assert.equal(retry.body.paidAttempts, 0);
+  }
+  await player.request("attempt/finish", { attemptId: third.body.attemptId, outcome: "lost" });
+  const after = await player.request("attempt/finish", { attemptId: first.body.attemptId, outcome: "won" });
+  assert.equal(after.status, 200);
+  assert.equal(after.body.activeAttemptId, null);
+  assert.equal(after.body.lives, 2);
+});
+
+test("legacy lastFinished wallets migrate without losing duplicate-finish protection", async t => {
+  const f = await fixture(t);
+  const player = f.client();
+  const first = await player.request("attempt/start", {});
+  await player.request("attempt/finish", { attemptId: first.body.attemptId, outcome: "lost" });
+  const file = path.join(f.directory, "wallets.json");
+  const data = JSON.parse(fs.readFileSync(file, "utf8"));
+  for (const wallet of Object.values(data.wallets) as any[]) delete wallet.finishedAttempts;
+  fs.writeFileSync(file, JSON.stringify(data));
+  f.reopen();
+  const next = await player.request("attempt/start", {});
+  const retried = await player.request("attempt/finish", { attemptId: first.body.attemptId, outcome: "won" });
+  assert.equal(retried.status, 200);
+  assert.equal(retried.body.activeAttemptId, next.body.attemptId);
+  assert.equal(retried.body.lives, 3);
+});
+
+test("finished attempt history stays bounded and evicted results never grant credit", async t => {
+  const f = await fixture(t);
+  const player = f.client();
+  let firstId = "", latestId = "";
+  for (let i = 0; i < 101; i++) {
+    f.advance(30 * 60 * 1000);
+    const start = await player.request("attempt/start", {});
+    assert.equal(start.status, 200);
+    firstId ||= start.body.attemptId;
+    latestId = start.body.attemptId;
+    assert.equal((await player.request("attempt/finish", { attemptId: latestId, outcome: "lost" })).status, 200);
+  }
+  const old = await player.request("attempt/finish", { attemptId: firstId, outcome: "won" });
+  assert.equal(old.status, 409);
+  assert.equal(old.body.code, "ATTEMPT_NOT_FOUND");
+  assert.equal(old.body.wallet.lives, 4);
+  const recent = await player.request("attempt/finish", { attemptId: latestId, outcome: "won" });
+  assert.equal(recent.status, 200);
+  assert.equal(recent.body.lives, 4);
+  assert.equal(recent.body.paidAttempts, 0);
+});
+
 test("failed lives refill every 30 minutes without exceeding five", async t => {
   const f = await fixture(t);
   const player = f.client();

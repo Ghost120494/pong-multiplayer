@@ -6,10 +6,11 @@ import crypto from "node:crypto";
 
 const MAX_LIVES = 5;
 const REFILL_MS = 30 * 60 * 1000;
+const FINISHED_ATTEMPT_LIMIT = 100;
 export const ATTEMPT_PACK = Object.freeze({ attempts: 5, price: "0.99", currency: "USD" });
 export const PAYPAL_MERCHANT_EMAIL = "jasonwilliams1204@gmail.com";
-type Attempt = { id: string; source: "life" | "paid"; startedAt: number };
-type Wallet = { lives: number; refillAt: number | null; paidAttempts: number; active: Attempt | null; lastFinished?: string };
+type Attempt = { id: string; source: "life" | "paid"; startedAt: number; requestId?: string };
+type Wallet = { lives: number; refillAt: number | null; paidAttempts: number; active: Attempt | null; lastFinished?: string; finishedAttempts?: string[] };
 type Purchase = { owner: string; reference: string; requestId: string; credited: boolean; captureId?: string };
 type Database = { version: 1; wallets: Record<string, Wallet>; orders: Record<string, Purchase>; captures: Record<string, string> };
 export type PuppyApiOptions = {
@@ -20,7 +21,7 @@ export type PuppyApiOptions = {
 };
 
 class ApiError extends Error {
-  constructor(public status: number, message: string) { super(message); }
+  constructor(public status: number, message: string, public code?: string, public wallet?: unknown) { super(message); }
 }
 
 /** Single-process store. In production put this directory on a persistent volume. */
@@ -38,6 +39,12 @@ class Store {
       : { version: 1, wallets: {}, orders: {}, captures: {} };
     if (this.data.version !== 1 || !this.data.wallets || !this.data.orders || !this.data.captures) {
       throw new Error("Unsupported Puppy Pals wallet store. Preserve the data and restore a valid backup.");
+    }
+    for (const wallet of Object.values(this.data.wallets)) {
+      const finished = Array.isArray(wallet.finishedAttempts)
+        ? wallet.finishedAttempts.filter(id => typeof id === "string") : [];
+      if (typeof wallet.lastFinished === "string") finished.push(wallet.lastFinished);
+      wallet.finishedAttempts = [...new Set(finished)].slice(-FINISHED_ATTEMPT_LIMIT);
     }
     this.committed = structuredClone(this.data);
   }
@@ -128,14 +135,21 @@ export function createPuppyApi(options: PuppyApiOptions = {}) {
       paidAttempts: wallet.paidAttempts, totalAttempts: wallet.lives + wallet.paidAttempts,
       paymentsAvailable, pack: ATTEMPT_PACK, activeAttempt: !!wallet.active,
       activeAttemptId: wallet.active?.id ?? null, activeAttemptStartedAt: wallet.active?.startedAt ?? null,
+      activeAttemptRequestId: wallet.active?.requestId ?? null,
     };
+  }
+  function attemptConflict(wallet: Wallet, code: string, message: string): never {
+    // Keep a new session and any natural refill durable even when its old attempt
+    // is gone, so the client can reconcile without a chain of replacement cookies.
+    store.save();
+    throw new ApiError(409, message, code, state(wallet));
   }
   function session(req: IncomingMessage, res: ServerResponse) {
     const supplied = new RegExp(`(?:^|;\\s*)${cookieName}=([a-f0-9]{64})(?:;|$)`).exec(req.headers.cookie ?? "")?.[1];
     let id = supplied && Object.hasOwn(store.data.wallets, supplied) ? supplied : undefined;
     if (!id) {
       id = crypto.randomBytes(32).toString("hex");
-      store.data.wallets[id] = { lives: MAX_LIVES, refillAt: null, paidAttempts: 0, active: null };
+      store.data.wallets[id] = { lives: MAX_LIVES, refillAt: null, paidAttempts: 0, active: null, finishedAttempts: [] };
       res.setHeader("set-cookie", `${cookieName}=${id}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000${production ? "; Secure" : ""}`);
     }
     const wallet = store.data.wallets[id];
@@ -232,28 +246,41 @@ export function createPuppyApi(options: PuppyApiOptions = {}) {
           store.save(); send(res, 200, state(wallet)); return;
         }
         if (route === "/api/puppy/attempt/start" && req.method === "POST") {
-          if (wallet.active) throw new ApiError(409, "A level is already in progress. Finish it before starting another.");
-          if (wallet.lives + wallet.paidAttempts <= 0) throw new ApiError(409, "You are out of attempts. Your next free life will refill soon.");
+          const requestId = input.requestId;
+          if (requestId !== undefined && (typeof requestId !== "string" ||
+              !/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(requestId))) {
+            throw new ApiError(400, "A valid reservation request ID is required.", "INVALID_REQUEST_ID");
+          }
+          if (wallet.active && requestId && wallet.active.requestId === requestId) {
+            store.save(); send(res, 200, { ...state(wallet), attemptId: wallet.active.id }); return;
+          }
+          if (wallet.active) attemptConflict(wallet, "ATTEMPT_ACTIVE", "A level is already in progress. Finish it before starting another.");
+          if (wallet.lives + wallet.paidAttempts <= 0) attemptConflict(wallet, "NO_ATTEMPTS", "You are out of attempts. Your next free life will refill soon.");
           const source = wallet.lives > 0 ? "life" : "paid";
           if (source === "life") { wallet.lives--; if (wallet.refillAt === null) wallet.refillAt = now() + REFILL_MS; }
           else wallet.paidAttempts--;
           const attemptId = crypto.randomUUID();
-          wallet.active = { id: attemptId, source, startedAt: now() };
+          wallet.active = { id: attemptId, source, startedAt: now(), ...(requestId ? { requestId } : {}) };
           store.save(); send(res, 200, { ...state(wallet), attemptId }); return;
         }
         if (route === "/api/puppy/attempt/finish" && req.method === "POST") {
           const attemptId = input.attemptId;
           if (typeof attemptId !== "string" || !["won", "lost", "abandoned"].includes(String(input.outcome))) throw new ApiError(400, "A valid level result is required.");
-          if (!wallet.active) {
-            if (wallet.lastFinished === attemptId) { store.save(); send(res, 200, state(wallet)); return; }
-            throw new ApiError(409, "This attempt is no longer active.");
+          // An old response may be retried after the player has begun another
+          // level. Acknowledge it without completing or refunding the new one.
+          if (wallet.lastFinished === attemptId || wallet.finishedAttempts?.includes(attemptId)) {
+            store.save(); send(res, 200, state(wallet)); return;
           }
-          if (wallet.active.id !== attemptId) throw new ApiError(409, "This attempt belongs to another level.");
+          if (!wallet.active) {
+            attemptConflict(wallet, "ATTEMPT_NOT_FOUND", "This attempt is no longer active.");
+          }
+          if (wallet.active.id !== attemptId) attemptConflict(wallet, "ATTEMPT_MISMATCH", "This attempt belongs to another level.");
           if (input.outcome === "won") {
             if (wallet.active.source === "paid") wallet.paidAttempts++;
             else { wallet.lives = Math.min(MAX_LIVES, wallet.lives + 1); if (wallet.lives === MAX_LIVES) wallet.refillAt = null; }
           }
           wallet.lastFinished = wallet.active.id;
+          wallet.finishedAttempts = [...(wallet.finishedAttempts ?? []), wallet.active.id].slice(-FINISHED_ATTEMPT_LIMIT);
           wallet.active = null;
           store.save(); send(res, 200, state(wallet)); return;
         }
@@ -302,7 +329,9 @@ export function createPuppyApi(options: PuppyApiOptions = {}) {
     } catch (error) {
       const status = error instanceof ApiError ? error.status : 500;
       // Do not log remote response bodies or credential-bearing requests.
-      send(res, status, { error: error instanceof ApiError ? error.message : "Puppy Pals could not save your request. Please retry." });
+      send(res, status, { error: error instanceof ApiError ? error.message : "Puppy Pals could not save your request. Please retry.",
+        ...(error instanceof ApiError && error.code ? { code: error.code } : {}),
+        ...(error instanceof ApiError && error.wallet ? { wallet: error.wallet } : {}) });
     }
     return true;
   };

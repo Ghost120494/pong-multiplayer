@@ -1026,7 +1026,7 @@ async function boot() {
     $("#objectives").innerHTML = snapshot.objectives.map((goal) => {
       const visual = goal.kind === "collect" ? `<img src="${ART}dog-${goal.breed}.svg" alt="">` : icon(goal.kind === "grass" ? "grass" : "star");
       const label = goal.kind === "collect" ? BREEDS[goal.breed].name + " pals" : goal.kind === "grass" ? "Clear grass" : "Score goal";
-      return `<div class="objective ${goal.kind} ${goal.current >= goal.target ? "done" : ""}" aria-label="${label}: ${Math.min(goal.current, goal.target)} of ${goal.target}">${visual}<div class="objective-copy"><span class="label">${label}</span><div class="count">${fmt(Math.min(goal.current, goal.target))} <span>/ ${fmt(goal.target)}</span></div><div class="objective-track"><div class="objective-fill" style="width:${Math.min(100, goal.current / goal.target * 100)}%"></div></div></div>`;
+      return `<div class="objective ${goal.kind} ${goal.current >= goal.target ? "done" : ""}" aria-label="${label}: ${Math.min(goal.current, goal.target)} of ${goal.target}">${visual}<div class="objective-copy"><span class="label">${label}</span><div class="count">${fmt(Math.min(goal.current, goal.target))} <span>/ ${fmt(goal.target)}</span></div><div class="objective-track"><div class="objective-fill" style="width:${Math.min(100, goal.current / goal.target * 100)}%"></div></div></div></div>`;
     }).join("");
   }
   function renderBoard(snapshot, settling = false) {

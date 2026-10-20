@@ -1,1 +1,11 @@
 node_modules
+.test-build/
+dist/mobile/
+.env
+.env.*
+!.env.example
+*.log
+puppy-pals-data/
+.puppy-data/
+android/
+ios/

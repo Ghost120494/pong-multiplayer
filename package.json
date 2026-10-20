@@ -1,10 +1,16 @@
 {
-  "name": "pong-server",
+  "name": "puppy-pals",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "A dog-themed match-3 adventure with 100 levels and optional verified PayPal attempt packs.",
+  "main": "dist/server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "node scripts/build.mjs",
+    "build:mobile": "node scripts/build.mjs mobile",
+    "start": "node dist/server.js",
+    "dev": "node scripts/dev.mjs",
+    "test": "node scripts/build.mjs test",
+    "cap:sync": "npm run build:mobile && cap sync",
+    "test:browser": "node tests/browser-smoke.mjs"
   },
   "keywords": [],
   "author": "",
@@ -13,6 +19,14 @@
     "bcryptjs": "^3.0.3",
     "esbuild": "^0.28.2",
     "localtunnel": "^2.0.2",
-    "ws": "^8.22.0"
+    "ws": "^8.22.0",
+    "@capacitor/core": "^7.6.9"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.6.9",
+    "typescript": "^5.9.3"
   }
 }

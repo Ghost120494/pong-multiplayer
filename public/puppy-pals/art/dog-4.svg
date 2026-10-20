@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none" role="img" aria-label="Pug">
+<title>Pug</title>
+<defs>
+ <linearGradient id="fur" x1="35" y1="19" x2="64" y2="88" gradientUnits="userSpaceOnUse"><stop stop-color="#f0d4a2"/><stop offset="1" stop-color="#d8b47e"/></linearGradient>
+ <linearGradient id="cream" x1="50" y1="41" x2="50" y2="89" gradientUnits="userSpaceOnUse"><stop stop-color="#fffdf6"/><stop offset="1" stop-color="#f7e8d5"/></linearGradient>
+ <filter id="shadow" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy="3" stdDeviation="2" flood-color="#48352b" flood-opacity=".16"/></filter>
+</defs>
+<g filter="url(#shadow)"><path d="M25 28Q13 23 8 36Q6 51 22 56L33 39ZM75 28Q87 23 92 36Q94 51 78 56L67 39Z" fill="#675050"/>
+<path d="M18 45Q18 23 50 23Q82 23 82 45L83 66Q79 88 50 90Q21 88 17 66Z" fill="url(#fur)"/>
+<path d="M32 33q18-7 36 0M37 39q13-5 26 0" stroke="#be9470" stroke-width="2" stroke-linecap="round"/>
+<path d="M20 53Q21 39 35 41Q45 42 50 53Q55 42 65 41Q79 39 80 53Q84 66 72 73Q69 87 50 86Q31 87 28 73Q16 66 20 53Z" fill="#756064"/>
+<path d="M35 65Q38 57 50 61Q62 57 65 65Q68 81 50 83Q32 81 35 65Z" fill="#9a7c77"/>
+<ellipse cx="26" cy="66" rx="4" ry="2.5" fill="#b98687"/><ellipse cx="74" cy="66" rx="4" ry="2.5" fill="#b98687"/><ellipse cx="33" cy="53" rx="5.3" ry="6" fill="#30282e"/><ellipse cx="67" cy="53" rx="5.3" ry="6" fill="#30282e"/>
+    <circle cx="31.5" cy="51" r="1.7" fill="white"/><circle cx="65.5" cy="51" r="1.7" fill="white"/>
+    <circle cx="34.9" cy="55.3" r=".8" fill="white" fill-opacity=".7"/><circle cx="68.9" cy="55.3" r=".8" fill="white" fill-opacity=".7"/><path d="M45 65Q50 62 55 65Q55 69 50 71Q45 69 45 65Z" fill="#352a31"/>
+    <ellipse cx="48.8" cy="65" rx="1.6" ry=".7" fill="white" fill-opacity=".3"/>
+    <path d="M50 70V74M50 73Q45 79 41 74M50 73Q55 79 59 74" stroke="#352a31" stroke-width="1.8" stroke-linecap="round"/>
+    <path d="M46 78Q50 82 54 78V81Q50 87 46 81Z" fill="#ed93a1"/></g>
+</svg>

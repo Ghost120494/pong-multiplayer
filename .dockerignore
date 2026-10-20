@@ -1,0 +1,11 @@
+node_modules
+.git
+.test-build
+dist/mobile
+android
+ios
+.env
+.env.*
+*.log
+puppy-pals-data
+.puppy-data

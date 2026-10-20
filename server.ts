@@ -6,9 +6,10 @@ import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
 import { WebSocketServer, WebSocket } from "ws";
 import { initState, step, H, State, Input } from "./src/core";
+import { handlePuppyApi } from "./src/puppy/payments";
 
 const PORT = Number(process.env.PORT ?? 8080);
-const PUBLIC = process.env.PUBLIC_DIR ?? path.resolve(__dirname, "public");
+const PUBLIC = path.resolve(process.env.PUBLIC_DIR ?? path.resolve(process.cwd(), "public"));
 const DB = process.env.USERS_FILE ?? path.resolve(__dirname, "users.json");
 const SECURE = process.env.NODE_ENV === "production"; // Secure cookies behind HTTPS
 const ORIGIN = process.env.ORIGIN; // e.g. https://pong.example.com; checked on WS upgrade
@@ -48,23 +49,47 @@ function readBody(req: http.IncomingMessage): Promise<any> {
   });
 }
 
-const MIME: Record<string, string> = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css" };
+const MIME: Record<string, string> = {
+  ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
+  ".svg": "image/svg+xml", ".png": "image/png", ".ico": "image/x-icon", ".json": "application/json",
+  ".webmanifest": "application/manifest+json", ".woff2": "font/woff2", ".woff": "font/woff",
+};
 const SEC_HEADERS = {
-  "content-security-policy": "default-src 'self'; connect-src 'self'; style-src 'self' 'unsafe-inline'",
+  "content-security-policy": "default-src 'self'; script-src 'self'; connect-src 'self'; img-src 'self' data:; font-src 'self'; style-src 'self' 'unsafe-inline'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
   "x-content-type-options": "nosniff", "referrer-policy": "no-referrer", "x-frame-options": "DENY",
 };
 
 const server = http.createServer(async (req, res) => {
-  const url = new URL(req.url ?? "/", "http://x");
-  const ip = req.socket.remoteAddress ?? "?";
-  if (req.method !== "GET") return json(res, 405, { error: "method" });
-  // static
-  if (url.pathname === "/pong" || url.pathname === "/snake" || url.pathname === "/incremental" || url.pathname === "/match3") { res.writeHead(301, { location: url.pathname + "/" + url.search }); return res.end(); }
-  let p = url.pathname.endsWith("/") ? url.pathname + "index.html" : url.pathname;
-  const file = path.join(PUBLIC, path.normalize(p).replace(/^(\.\.[/\\])+/, ""));
-  if (!file.startsWith(PUBLIC) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) { res.writeHead(404); return res.end("not found"); }
-  res.writeHead(200, { "content-type": MIME[path.extname(file)] ?? "application/octet-stream", ...SEC_HEADERS });
-  fs.createReadStream(file).pipe(res);
+  try {
+    const url = new URL(req.url ?? "/", "http://x");
+    if (await handlePuppyApi(req, res)) return;
+    if (req.method !== "GET" && req.method !== "HEAD") return json(res, 405, { error: "method" });
+    if (url.pathname === "/match3" || url.pathname === "/match3/") {
+      res.writeHead(302, { location: "/" + url.search }); return res.end();
+    }
+    if (["/pong", "/snake", "/incremental"].includes(url.pathname)) {
+      res.writeHead(301, { location: url.pathname + "/" + url.search }); return res.end();
+    }
+    let pathname: string;
+    try { pathname = decodeURIComponent(url.pathname); }
+    catch { return json(res, 400, { error: "Invalid request path" }); }
+    if (pathname.includes("\0")) return json(res, 400, { error: "Invalid request path" });
+    const file = path.resolve(PUBLIC, "." + (pathname.endsWith("/") ? pathname + "index.html" : pathname));
+    if (!file.startsWith(PUBLIC + path.sep) || !fs.existsSync(file) || !fs.statSync(file).isFile()) {
+      res.writeHead(404, SEC_HEADERS); return res.end("not found");
+    }
+    const headers: Record<string, string> = { "content-type": MIME[path.extname(file)] ?? "application/octet-stream", ...SEC_HEADERS };
+    if (pathname === "/sw.js") headers["cache-control"] = "no-cache";
+    if (path.extname(file) === ".html") headers["cache-control"] = "no-cache";
+    res.writeHead(200, headers);
+    if (req.method === "HEAD") return res.end();
+    const stream = fs.createReadStream(file);
+    stream.on("error", () => res.destroy());
+    stream.pipe(res);
+  } catch {
+    if (!res.headersSent) return json(res, 500, { error: "The server could not complete this request" });
+    res.destroy();
+  }
 });
 
 // ---- matches ----
@@ -128,4 +153,4 @@ server.on("upgrade", (req, sock, head) => {
 
 process.on("uncaughtException", e => console.error("uncaught", e));
 wss.on("error", e => console.error("wss", e));
-server.listen(PORT, () => console.log(`pong on :${PORT}`));
+server.listen(PORT, () => console.log(`Puppy Pals and games on :${PORT}`));

@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 600" fill="none" role="img" aria-label="A dreamy garden with a little puppy house"><title>Puppy Meadow</title>
+<defs>
+ <linearGradient id="sky" x1="500" y1="0" x2="500" y2="600" gradientUnits="userSpaceOnUse"><stop stop-color="#e4eef0"/><stop offset=".6" stop-color="#f6f5e9"/><stop offset="1" stop-color="#f7f1dc"/></linearGradient>
+ <linearGradient id="hill" x1="600" y1="300" x2="600" y2="600" gradientUnits="userSpaceOnUse"><stop stop-color="#bdd4b8"/><stop offset="1" stop-color="#94bc99"/></linearGradient>
+ <linearGradient id="roof" x1="725" y1="294" x2="725" y2="375" gradientUnits="userSpaceOnUse"><stop stop-color="#b8a3d5"/><stop offset="1" stop-color="#967cba"/></linearGradient>
+ <linearGradient id="house" x1="680" y1="345" x2="750" y2="471" gradientUnits="userSpaceOnUse"><stop stop-color="#fff8df"/><stop offset="1" stop-color="#ead5b2"/></linearGradient>
+ <filter id="shadow"><feDropShadow dx="0" dy="7" stdDeviation="5" flood-color="#587961" flood-opacity=".13"/></filter>
+ <g id="flower"><path d="M0 0v19m0-8q-11-7-12 0 4 6 12 3m0-7q10-7 11 0-4 7-11 3" stroke="#7ca782" stroke-width="2" stroke-linecap="round"/><circle cx="0" cy="-4" r="5" fill="#f6e1b3"/><circle cx="-5" cy="0" r="5" fill="#f6e1b3"/><circle cx="5" cy="0" r="5" fill="#f6e1b3"/><circle cx="0" cy="5" r="5" fill="#f6e1b3"/><circle r="3" fill="#c7a45a"/></g>
+ <g id="paleFlower"><path d="M0 0v16" stroke="#91ae89" stroke-width="2"/><circle cx="0" cy="-4" r="5" fill="#fcf9ed"/><circle cx="-5" cy="0" r="5" fill="#fcf9ed"/><circle cx="5" cy="0" r="5" fill="#fcf9ed"/><circle cx="0" cy="5" r="5" fill="#fcf9ed"/><circle r="3" fill="#dfbf74"/></g>
+ <g id="lavenderFlower"><path d="M0 0v16" stroke="#86a180" stroke-width="2"/><circle cx="0" cy="-4" r="5" fill="#c8b1d6"/><circle cx="-5" cy="0" r="5" fill="#c8b1d6"/><circle cx="5" cy="0" r="5" fill="#c8b1d6"/><circle cx="0" cy="5" r="5" fill="#c8b1d6"/><circle r="3" fill="#f7eed5"/></g>
+</defs>
+<path fill="url(#sky)" d="M0 0h1000v600H0z"/>
+<circle cx="767" cy="108" r="62" fill="#f4e5b9" opacity=".7"/><circle cx="767" cy="108" r="42" fill="#f8ebc9"/>
+<path d="M63 142q-8-27 18-29 8-35 38-24 25-22 42 6 27-4 30 18 25 1 21 25Z" fill="#fffef5" opacity=".9"/>
+<path d="M367 86q-4-19 17-21 5-27 31-20 19-18 34 4 21-3 24 17 17 0 16 19Z" fill="#fffef9" opacity=".75"/>
+<path d="M824 207q-3-18 16-21 8-29 31-20 21-14 34 6 21-1 24 17 20 0 17 18Z" fill="#fffdf5" opacity=".7"/>
+<path d="M0 304Q170 221 341 292T685 278q173-67 315 27v295H0Z" fill="#d4dfc6"/>
+<path d="M0 367Q153 310 310 352T675 331q156-42 325-1v270H0Z" fill="#bed2b5"/>
+<path d="M0 449Q157 341 376 399T725 416q164-64 275-20v204H0Z" fill="url(#hill)"/>
+<path d="M0 545Q174 473 367 506T706 492q180-25 294 21v87H0Z" fill="#abc89f"/>
+<!-- Soft looping garden path. -->
+<path d="M471 620q-57-69 47-106t69-72q-18-20-7-32" stroke="#ece5c8" stroke-width="50" stroke-linecap="round"/>
+<path d="M467 620q-52-68 50-106t70-72q-18-20-7-32" stroke="#f4edd6" stroke-width="31" stroke-linecap="round"/>
+<!-- Rounded garden trees. -->
+<path d="M138 419V270m0 78-23-24m23-2 23-22" stroke="#a3a98a" stroke-width="13" stroke-linecap="round"/>
+<path d="M87 288q-19-34 5-56-2-30 31-37 21-22 49-2 36-4 39 28 31 19 12 53-3 33-39 34-30 20-55-1-32 10-42-19Z" fill="#a3c3ad"/>
+<path d="M104 260q-12-26 13-38 15-19 37-11 28-3 36 21" stroke="#b5d1b9" stroke-width="15" stroke-linecap="round"/>
+<circle cx="179" cy="282" r="9" fill="#cfbdcd"/><circle cx="102" cy="264" r="8" fill="#cfbdcd"/><circle cx="144" cy="230" r="7" fill="#d5c4d0"/>
+<path d="M894 413V296m0 53 21-20m-21 1-20-23" stroke="#aaa58c" stroke-width="11" stroke-linecap="round"/>
+<path d="M853 313q-18-25 3-46-3-26 24-32 18-17 40-2 31-2 33 23 24 17 9 44-2 27-29 28-23 18-44 1-25 9-36-16Z" fill="#c1b6d3"/>
+<path d="M868 285q-8-22 12-29 17-14 37-4" stroke="#d1c7dd" stroke-width="13" stroke-linecap="round"/>
+<!-- Little picket fence. -->
+<g stroke="#f9f2db" stroke-width="9" stroke-linecap="round"><path d="M46 414h235M46 440h235"/><path d="M61 458v-61l8-8 8 8v61m25 0v-61l8-8 8 8v61m25 0v-61l8-8 8 8v61m25 0v-61l8-8 8 8v61m25 0v-61l8-8 8 8v61"/></g>
+<!-- Puppy house. -->
+<ellipse cx="720" cy="480" rx="119" ry="17" fill="#7f9e81" opacity=".23"/>
+<g filter="url(#shadow)"><path d="M641 362 720 309l79 53v111H641Z" fill="url(#house)"/><path d="M619 368 709 296q11-9 22 0l90 72-15 17-86-66-86 66Z" fill="url(#roof)"/><path d="M641 365 720 309l79 56" stroke="#806ca3" stroke-width="4" stroke-linejoin="round"/><path d="M686 474v-54q0-43 34-43t34 43v54Z" fill="#a28e88"/><path d="M695 474v-52q0-34 25-34t25 34v52Z" fill="#74646e"/><path d="M652 453h24m88 0h24m-136-19h24m88 0h24m-136-19h24m88 0h24" stroke="#d6be9e" stroke-width="3" stroke-linecap="round"/>
+<path d="M699 352a5 5 0 1 0-7-7 6 6 0 1 0 0 12l6-1h44l6 1a6 6 0 1 0 0-12 5 5 0 1 0-7 7Z" fill="#fff9e8"/>
+<path d="M662 478h116" stroke="#ead2ae" stroke-width="8" stroke-linecap="round"/></g>
+<!-- Flowers and tufts. -->
+<use href="#flower" x="74" y="489"/><use href="#paleFlower" x="102" y="501"/><use href="#lavenderFlower" x="255" y="491"/><use href="#paleFlower" x="279" y="482"/><use href="#flower" x="812" y="493"/><use href="#lavenderFlower" x="840" y="500"/><use href="#paleFlower" x="874" y="484"/><use href="#flower" x="335" y="560"/><use href="#paleFlower" x="361" y="551"/><use href="#lavenderFlower" x="697" y="565"/><use href="#flower" x="725" y="570"/>
+<g stroke="#91b48e" stroke-width="3" stroke-linecap="round"><path d="m180 527 4-11 5 10 5-8m-74 54 4-11 5 10 5-8m270-114 4-11 5 10 5-8m426 91 4-11 5 10 5-8m40-99 4-11 5 10 5-8M284 393l4-9 4 9"/></g>
+<!-- Distant butterflies. -->
+<path d="M321 328q-17-22-22-6 0 13 22 10-9 15 1 15 12-4 4-15 23 0 17-13-10-10-22 9Z" fill="#d3b5cd" opacity=".85"/>
+<path d="M848 368q-11-15-15-4 0 8 15 6-6 10 1 10 8-3 2-10 16 0 12-9-7-7-15 7Z" fill="#edcf9e"/>
+</svg>

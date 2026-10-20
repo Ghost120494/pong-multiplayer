@@ -1,0 +1,18 @@
+{
+  "id": "/",
+  "name": "Puppy Pals",
+  "short_name": "Puppy Pals",
+  "description": "A pawsitively delightful match-3 adventure with 100 levels and six lovable puppies.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#fbfaf6",
+  "theme_color": "#7957d5",
+  "categories": ["games", "entertainment"],
+  "icons": [
+    { "src": "/puppy-pals/art/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/puppy-pals/art/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/puppy-pals/art/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

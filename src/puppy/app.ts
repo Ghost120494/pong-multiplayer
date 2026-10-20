@@ -95,7 +95,7 @@ let previousFocus: HTMLElement | null = null;
 let deferredInstall: any = null;
 let audio: AudioContext | null = null;
 let toastTimer: ReturnType<typeof setTimeout>;
-let suppressClickUntil = 0;
+let suppressNextPointerClick = false;
 
 function sound(kind: 'match' | 'invalid' | 'win' | 'tap', combo = 1) {
   if (!save.sound) return;
@@ -507,11 +507,16 @@ window.addEventListener('offline', () => { connected = false; renderWallet(); })
 shell(); renderAll(); status('Tap two neighbors or swipe. Match three to make new pals.');
 const board = $('#board');
 board.addEventListener('click', event => {
-  if (Date.now() < suppressClickUntil) return;
+  // Ignore the synthetic click belonging to a swipe, while allowing a new tap immediately.
+  if (suppressNextPointerClick) {
+    suppressNextPointerClick = false;
+    if (event.detail > 0) return;
+  }
   const tile = (event.target as Element).closest<HTMLElement>('.tile'); if (tile) selectCell({ r: Number(tile.dataset.r), c: Number(tile.dataset.c) });
 });
 let pointer: { point: Coord; x: number; y: number; id: number } | null = null;
 board.addEventListener('pointerdown', event => {
+  suppressNextPointerClick = false;
   const tile = (event.target as Element).closest<HTMLElement>('.tile');
   if (!tile || busy || event.button !== 0) return;
   pointer = { point: { r: Number(tile.dataset.r), c: Number(tile.dataset.c) }, x: event.clientX, y: event.clientY, id: event.pointerId };
@@ -522,12 +527,12 @@ board.addEventListener('pointerup', event => {
   const start = pointer; pointer = null;
   const dx = event.clientX - start.x, dy = event.clientY - start.y;
   if (Math.hypot(dx, dy) > 18 && !busy && !activeBooster) {
-    suppressClickUntil = Date.now() + 500;
+    suppressNextPointerClick = true;
     const target = Math.abs(dx) > Math.abs(dy) ? { r: start.point.r, c: start.point.c + Math.sign(dx) } : { r: start.point.r + Math.sign(dy), c: start.point.c };
     if (target.r >= 0 && target.r < 8 && target.c >= 0 && target.c < 8) void doSwap(start.point, target);
   }
 });
-board.addEventListener('pointercancel', () => { pointer = null; });
+board.addEventListener('pointercancel', () => { pointer = null; suppressNextPointerClick = false; });
 board.addEventListener('keydown', event => {
   if (busy) return;
   const tile = (event.target as Element).closest<HTMLElement>('.tile'); if (!tile) return;

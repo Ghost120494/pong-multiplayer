@@ -511,7 +511,7 @@ var previousFocus = null;
 var deferredInstall = null;
 var audio = null;
 var toastTimer;
-var suppressClickUntil = 0;
+var suppressNextPointerClick = false;
 function sound(kind, combo = 1) {
   if (!save.sound) return;
   try {
@@ -1122,12 +1122,16 @@ renderAll();
 status("Tap two neighbors or swipe. Match three to make new pals.");
 var board = $("#board");
 board.addEventListener("click", (event) => {
-  if (Date.now() < suppressClickUntil) return;
+  if (suppressNextPointerClick) {
+    suppressNextPointerClick = false;
+    if (event.detail > 0) return;
+  }
   const tile = event.target.closest(".tile");
   if (tile) selectCell({ r: Number(tile.dataset.r), c: Number(tile.dataset.c) });
 });
 var pointer = null;
 board.addEventListener("pointerdown", (event) => {
+  suppressNextPointerClick = false;
   const tile = event.target.closest(".tile");
   if (!tile || busy || event.button !== 0) return;
   pointer = { point: { r: Number(tile.dataset.r), c: Number(tile.dataset.c) }, x: event.clientX, y: event.clientY, id: event.pointerId };
@@ -1142,13 +1146,14 @@ board.addEventListener("pointerup", (event) => {
   pointer = null;
   const dx = event.clientX - start.x, dy = event.clientY - start.y;
   if (Math.hypot(dx, dy) > 18 && !busy && !activeBooster) {
-    suppressClickUntil = Date.now() + 500;
+    suppressNextPointerClick = true;
     const target = Math.abs(dx) > Math.abs(dy) ? { r: start.point.r, c: start.point.c + Math.sign(dx) } : { r: start.point.r + Math.sign(dy), c: start.point.c };
     if (target.r >= 0 && target.r < 8 && target.c >= 0 && target.c < 8) void doSwap(start.point, target);
   }
 });
 board.addEventListener("pointercancel", () => {
   pointer = null;
+  suppressNextPointerClick = false;
 });
 board.addEventListener("keydown", (event) => {
   if (busy) return;

@@ -101,6 +101,15 @@ try {
   const context = await browser.newContext({ viewport: { width: 1440, height: 1080 }, reducedMotion: 'reduce' });
   const page = await context.newPage(); monitor(page);
   await page.goto(BASE); await ready(page); await noOverflow(page, 'desktop');
+  // Keep the opening board reproducible: a random early win can end the level
+  // before the shop/booster checks. Change only a fresh run's random seed.
+  assert.deepEqual((await saved(page)).run.actions, [], 'seed only an untouched fresh game');
+  await page.evaluate(key => {
+    const fresh = JSON.parse(localStorage.getItem(key));
+    fresh.run.seed = 0;
+    localStorage.setItem(key, JSON.stringify(fresh));
+  }, KEY);
+  await page.reload(); await ready(page);
   await page.screenshot({ path: '/tmp/puppy-desktop.png', fullPage: true });
 
   await playMove(page, await hintedMove(page));
@@ -112,6 +121,13 @@ try {
   assert.deepEqual(await boardState(page), movedBoard, 'seeded board restores exactly');
   await playMove(page, await hintedMove(page), 'swipe');
   assert.equal((await saved(page)).run.actions.length, 2, 'real pointer swipe makes exactly one move');
+  // A new tap must work immediately after a swipe, without a timed lockout.
+  const immediateTap = { r: 0, c: 0 };
+  await cell(page, immediateTap).click();
+  assert.equal(await cell(page, immediateTap).getAttribute('aria-pressed'), 'true', 'a genuine tap immediately after a swipe selects its puppy');
+  await cell(page, immediateTap).click();
+  assert.equal(await cell(page, immediateTap).getAttribute('aria-pressed'), 'false', 'tapping the same puppy deselects without making another move');
+  assert.equal((await saved(page)).run.actions.length, 2, 'selection taps do not spend moves');
 
   const beforeDaily = await saved(page);
   await page.locator('[data-action="daily"]').click();

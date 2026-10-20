@@ -13,6 +13,8 @@ The server uses port 8080 by default. `npm run dev` watches the TypeScript clien
 
 For optional browser QA, with Playwright and Chromium available, start the server and run `PUPPY_BASE_URL=http://127.0.0.1:8080 npm run test:browser`. Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` if Chromium is not installed at `/usr/bin/chromium`. The smoke covers real clicks, swipes, a level win, saved progress, mobile layouts, offline play and disabled native PayPal checkout; it writes screenshots to `/tmp/puppy-desktop.png` and `/tmp/puppy-mobile.png`.
 
+`npm run test:loading` checks slow artwork loading, stable board cells during matches/refills, and exact saved-board restoration with normal and reduced motion. It uses the same browser prerequisites and `PUPPY_BASE_URL` override (default port 8080).
+
 Puppy Pals is the home page. Existing Pong, Snake and Incremental games remain available at `/pong/`, `/snake/` and `/incremental/`. The original match-3 route redirects to Puppy Pals.
 
 PayPal packs cost **$0.99 USD for five attempts**, payable to `jasonwilliams1204@gmail.com`. Checkout remains unavailable until the merchant's PayPal app credentials, public return origin and persistent wallet storage are configured. Payments are verified on the server before attempts are credited; no card information is stored by the game.

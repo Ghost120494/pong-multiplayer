@@ -10,7 +10,8 @@
     "dev": "node scripts/dev.mjs",
     "test": "node scripts/build.mjs test",
     "cap:sync": "npm run build:mobile && cap sync",
-    "test:browser": "node tests/browser-smoke.mjs"
+    "test:browser": "node tests/browser-smoke.mjs",
+    "test:loading": "node tests/board-loading.browser.mjs"
   },
   "keywords": [],
   "author": "",

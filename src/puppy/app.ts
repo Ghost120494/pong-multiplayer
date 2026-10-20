@@ -96,6 +96,9 @@ let deferredInstall: any = null;
 let audio: AudioContext | null = null;
 let toastTimer: ReturnType<typeof setTimeout>;
 let suppressNextPointerClick = false;
+let artworkReady = false;
+type TileView = { button: HTMLButtonElement; image?: HTMLImageElement; rainbow?: HTMLSpanElement; badge?: HTMLSpanElement };
+const tileViews: TileView[] = [];
 
 function sound(kind: 'match' | 'invalid' | 'win' | 'tap', combo = 1) {
   if (!save.sound) return;
@@ -142,7 +145,7 @@ function shell() {
       <section class="game-card">
         <div class="level-header"><div class="level-heading"><span class="level-badge">${icon('paw')}</span><div><div class="level-label" id="level-label"></div><h2 id="level-title"></h2></div></div><div class="level-tools"><button class="small-icon" data-action="restart" aria-label="Restart level">${icon('reset')}</button><div class="moves-box" id="moves-box"><strong class="moves-number" id="moves">24</strong><span class="moves-label">moves<br>left</span></div></div></div>
         <div class="objectives" id="objectives" aria-label="Level goals"></div>
-        <div class="board-wrap"><div id="board" class="board" role="group" aria-label="8 by 8 dog matching board"></div><div id="combo-area" aria-live="off"></div></div>
+        <div class="board-wrap" data-loading="true"><div id="board" class="board" role="group" aria-label="8 by 8 dog matching board"></div><div class="board-loading" role="status">${icon('paw')}<span>Getting your pals ready…</span></div><div id="combo-area" aria-live="off"></div></div>
         <div id="game-status" class="game-status" role="status" aria-live="polite"></div>
         <div class="game-bottom"><div><span class="score-label">YOUR SCORE</span><strong class="score-value" id="score">0</strong></div><button class="hint-button" data-action="hint">${icon('bulb')} A little hint</button></div>
       </section>
@@ -180,7 +183,7 @@ function renderWallet() {
   for (const kind of Object.keys(BOOSTERS) as Booster[]) {
     $(`#count-${kind}`).textContent = String(save.boosters[kind]);
     const button = document.querySelector<HTMLButtonElement>(`.booster[data-booster="${kind}"]`)!;
-    button.disabled = busy || displayed.won || displayed.lost;
+    button.disabled = busy || !artworkReady || displayed.won || displayed.lost;
     button.classList.toggle('selected', activeBooster === kind);
   }
   document.querySelectorAll<HTMLButtonElement>('.sound-toggle').forEach(button => {
@@ -205,17 +208,69 @@ function renderHud(snapshot: Snapshot) {
     return `<div class="objective ${goal.kind} ${goal.current >= goal.target ? 'done' : ''}" aria-label="${label}: ${Math.min(goal.current, goal.target)} of ${goal.target}">${visual}<div class="objective-copy"><span class="label">${label}</span><div class="count">${fmt(Math.min(goal.current, goal.target))} <span>/ ${fmt(goal.target)}</span></div><div class="objective-track"><div class="objective-fill" style="width:${Math.min(100, goal.current / goal.target * 100)}%"></div></div></div>`;
   }).join('');
 }
-function renderBoard(snapshot: Snapshot) {
+function renderBoard(snapshot: Snapshot, settling = false) {
+  const board = $('#board');
   const hadFocus = document.activeElement?.closest('#board');
-  $('#board').setAttribute('aria-busy', String(busy));
-  $('#board').innerHTML = snapshot.board.map((row, r) => row.map((tile, c) => {
+  board.setAttribute('aria-busy', String(busy || !artworkReady));
+  // Mount the grid once. Replacing it made every puppy blink on each tap/refill.
+  if (!tileViews.length) {
+    const fragment = document.createDocumentFragment();
+    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+      const button = document.createElement('button');
+      button.className = 'tile'; button.dataset.r = String(r); button.dataset.c = String(c);
+      tileViews.push({ button }); fragment.append(button);
+    }
+    board.append(fragment);
+  }
+  snapshot.board.forEach((row, r) => row.forEach((tile, c) => {
+    const view = tileViews[r * 8 + c];
+    const cell = view.button;
+    const previousId = cell.dataset.tileId;
     const grass = snapshot.grass[r][c];
     const special = tile?.special;
-    const breed = tile && tile.breed >= 0 ? BREEDS[tile.breed].name : 'Rainbow paw';
+    const rainbow = !!tile && tile.breed < 0;
+    const breed = !tile ? 'Empty space' : tile.breed >= 0 ? BREEDS[tile.breed].name : 'Rainbow paw';
     const label = `Row ${r + 1}, column ${c + 1}: ${breed}${special ? ', ' + special + ' special' : ''}${grass ? ', ' + grass + ' grass layer' + (grass > 1 ? 's' : '') : ''}`;
-    return `<button class="tile ${grass ? 'grass' : ''} ${grass > 1 ? 'grass-double' : ''} ${selected?.r === r && selected?.c === c ? 'selected' : ''}" data-r="${r}" data-c="${c}" data-breed="${tile?.breed ?? -2}" style="--tile-bg:${tile && tile.breed >= 0 ? TILE_COLORS[tile.breed] : '#f6f1e7'}" tabindex="${focusedCell.r === r && focusedCell.c === c ? 0 : -1}" aria-label="${esc(label)}" aria-pressed="${selected?.r === r && selected?.c === c}" ${busy || !tile || snapshot.won || snapshot.lost ? 'disabled' : ''}>${tile ? special === 'rainbow' ? `<span class="rainbow-paw">${icon('paw')}</span>` : `<img src="${ART}dog-${tile.breed}.svg" alt="" draggable="false">${special ? `<span class="special-badge">${special === 'row' ? '↔' : special === 'column' ? '↕' : icon('blast')}</span>` : ''}` : ''}</button>`;
-  }).join('')).join('');
+    cell.classList.remove('clearing', 'hint', 'settling');
+    cell.classList.toggle('grass', grass > 0); cell.classList.toggle('grass-double', grass > 1);
+    cell.classList.toggle('selected', selected?.r === r && selected?.c === c);
+    cell.dataset.breed = String(tile?.breed ?? -2); cell.dataset.tileId = tile ? String(tile.id) : '';
+    cell.style.setProperty('--tile-bg', tile && tile.breed >= 0 ? TILE_COLORS[tile.breed] : '#f6f1e7');
+    cell.tabIndex = focusedCell.r === r && focusedCell.c === c ? 0 : -1;
+    cell.setAttribute('aria-label', label); cell.setAttribute('aria-pressed', String(selected?.r === r && selected?.c === c));
+    cell.disabled = busy || !artworkReady || !tile || snapshot.won || snapshot.lost;
+    if (tile && tile.breed >= 0) {
+      if (!view.image) {
+        view.image = new Image(); view.image.alt = ''; view.image.draggable = false; cell.prepend(view.image);
+      }
+      const source = `${ART}dog-${tile.breed}.svg`;
+      if (view.image.getAttribute('src') !== source) view.image.src = source;
+    }
+    if (view.image) view.image.hidden = !tile || rainbow;
+    if (rainbow && !view.rainbow) {
+      view.rainbow = document.createElement('span'); view.rainbow.className = 'rainbow-paw';
+      view.rainbow.innerHTML = icon('paw'); cell.append(view.rainbow);
+    }
+    if (view.rainbow) view.rainbow.hidden = !rainbow;
+    if (special && special !== 'rainbow') {
+      if (!view.badge) { view.badge = document.createElement('span'); view.badge.className = 'special-badge'; cell.append(view.badge); }
+      if (view.badge.dataset.special !== special) {
+        view.badge.innerHTML = special === 'row' ? '↔' : special === 'column' ? '↕' : icon('blast');
+        view.badge.dataset.special = special;
+      }
+    }
+    if (view.badge) view.badge.hidden = !special || special === 'rainbow';
+    if (settling && tile && previousId !== String(tile.id)) cell.classList.add('settling');
+  }));
   if (hadFocus && !busy) document.querySelector<HTMLButtonElement>(`.tile[data-r="${focusedCell.r}"][data-c="${focusedCell.c}"]`)?.focus({ preventScroll: true });
+}
+async function prepareArtwork() {
+  // Reveal the restored board once all six faces are decoded, rather than tile by tile.
+  await Promise.allSettled(BREEDS.map(breed => {
+    const image = new Image(); image.src = `${ART}dog-${breed.id}.svg`; return image.decode();
+  }));
+  artworkReady = true; $('.board-wrap').dataset.loading = 'false';
+  renderBoard(displayed); renderWallet();
 }
 function renderAll() { displayed = game.snapshot(); renderHud(displayed); renderBoard(displayed); renderMap(); renderWallet(); }
 function localWallet() {
@@ -317,12 +372,12 @@ async function animate(result: TurnResult) {
       lastCombo = frame.combo;
       await sleep(140);
     }
-    displayed = frame.snapshot; renderHud(displayed); renderBoard(displayed); await sleep(frame.combo === 0 ? 100 : 90);
+    displayed = frame.snapshot; renderHud(displayed); renderBoard(displayed, frame.combo > 0 && !frame.cleared.length); await sleep(frame.combo === 0 ? 100 : 90);
   }
   $('#combo-area').innerHTML = '';
 }
 async function doSwap(a: Coord, b: Coord) {
-  if (busy || displayed.won || displayed.lost) return;
+  if (busy || !artworkReady || displayed.won || displayed.lost) return;
   busy = true; selected = null; activeBooster = null; renderBoard(displayed); renderWallet();
   try {
     if (!await ensureAttempt()) return;
@@ -336,7 +391,7 @@ async function doSwap(a: Coord, b: Coord) {
   finally { busy = false; renderAll(); }
 }
 async function doBooster(kind: Booster, target?: Coord) {
-  if (busy || !save.boosters[kind] || displayed.won || displayed.lost) return;
+  if (busy || !artworkReady || !save.boosters[kind] || displayed.won || displayed.lost) return;
   busy = true; selected = null; activeBooster = null; renderWallet();
   try {
     if (!await ensureAttempt()) return;
@@ -347,7 +402,7 @@ async function doBooster(kind: Booster, target?: Coord) {
   } finally { busy = false; renderAll(); }
 }
 function selectCell(point: Coord) {
-  if (busy || displayed.won || displayed.lost) return;
+  if (busy || !artworkReady || displayed.won || displayed.lost) return;
   focusedCell = point;
   if (activeBooster) { void doBooster(activeBooster, point); return; }
   if (selected && Math.abs(selected.r - point.r) + Math.abs(selected.c - point.c) === 1) { void doSwap(selected, point); return; }
@@ -505,6 +560,7 @@ window.addEventListener('online', () => { void refreshWallet(); });
 window.addEventListener('offline', () => { connected = false; renderWallet(); });
 
 shell(); renderAll(); status('Tap two neighbors or swipe. Match three to make new pals.');
+void prepareArtwork();
 const board = $('#board');
 board.addEventListener('click', event => {
   // Ignore the synthetic click belonging to a swipe, while allowing a new tap immediately.

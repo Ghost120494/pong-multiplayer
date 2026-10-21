@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none" role="img" aria-label="Boston Terrier">
+<title>Boston Terrier</title>
+<defs>
+<linearGradient id="fur" x1="35" y1="19" x2="64" y2="88" gradientUnits="userSpaceOnUse"><stop stop-color="#535363"/><stop offset="1" stop-color="#292936"/></linearGradient>
+<linearGradient id="cream" x1="50" y1="41" x2="50" y2="89" gradientUnits="userSpaceOnUse"><stop stop-color="#fffdf6"/><stop offset="1" stop-color="#f7e8d5"/></linearGradient>
+<filter id="shadow" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy="3" stdDeviation="2" flood-color="#48352b" flood-opacity=".16"/></filter>
+</defs>
+<g filter="url(#shadow)">
+<path d="M22 39 19 10Q19 5 24 9L41 29M78 39 81 10Q81 5 76 9L59 29" fill="url(#fur)" stroke="#333340" stroke-width="1.2" stroke-linejoin="round"/>
+<path d="m25 29-2-14 10 15M75 29l2-14-10 15" fill="#c88f9f"/>
+<path d="M15 48Q15 25 39 25Q50 22 61 25Q85 25 85 48L85 67Q81 86 50 89Q19 86 15 67Z" fill="url(#fur)"/>
+<path d="M44 25Q50 23 56 25L55 46Q54 55 63 59Q81 60 77 74Q72 86 50 87Q28 86 23 74Q19 60 37 59Q46 55 45 46Z" fill="#fffdf8"/>
+<path d="M27 41q7-5 14-1M59 40q7-4 14 1" stroke="#a3a0ae" stroke-width="2.4" stroke-linecap="round"/>
+<ellipse cx="25" cy="65" rx="5" ry="3" fill="#edb3bd" fill-opacity=".7"/><ellipse cx="75" cy="65" rx="5" ry="3" fill="#edb3bd" fill-opacity=".7"/>
+<ellipse cx="34" cy="52" rx="5.3" ry="6" fill="#382d35"/><ellipse cx="66" cy="52" rx="5.3" ry="6" fill="#382d35"/><circle cx="32.5" cy="50" r="1.7" fill="white"/><circle cx="64.5" cy="50" r="1.7" fill="white"/><circle cx="35.9" cy="54.3" r=".8" fill="white" fill-opacity=".7"/><circle cx="67.9" cy="54.3" r=".8" fill="white" fill-opacity=".7"/>
+<path d="M45 64Q50 61 55 64Q55 68 50 70Q45 68 45 64Z" fill="#3b2c31"/><ellipse cx="48.8" cy="64" rx="1.6" ry=".7" fill="white" fill-opacity=".3"/>
+<path d="M50 69V73M50 72Q45 78 41 73M50 72Q55 78 59 73" stroke="#3b2c31" stroke-width="1.8" stroke-linecap="round"/><path d="M46 77Q50 81 54 77V80Q50 86 46 80Z" fill="#ed93a1"/>
+</g></svg>

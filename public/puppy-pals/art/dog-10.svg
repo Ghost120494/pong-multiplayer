@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none" role="img" aria-label="Samoyed">
+<title>Samoyed</title>
+<defs>
+<linearGradient id="fur" x1="35" y1="19" x2="64" y2="88" gradientUnits="userSpaceOnUse"><stop stop-color="#ffffff"/><stop offset="1" stop-color="#e8eff5"/></linearGradient>
+<linearGradient id="cream" x1="50" y1="41" x2="50" y2="89" gradientUnits="userSpaceOnUse"><stop stop-color="#fffdf6"/><stop offset="1" stop-color="#f7e8d5"/></linearGradient>
+<filter id="shadow" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy="3" stdDeviation="2" flood-color="#48352b" flood-opacity=".16"/></filter>
+</defs>
+<g filter="url(#shadow)">
+<path d="M24 39 23 16Q24 10 29 15L42 31M76 39 77 16Q76 10 71 15L58 31" fill="#f9fcff" stroke="#c5d0e0" stroke-width="1.4" stroke-linejoin="round"/>
+<path d="m28 31 1-10 7 11M72 31l-1-10-7 11" fill="#f0c9d1"/>
+<path d="M20 37 18 29 31 30 34 21 44 25 50 20 56 25 66 21 69 30 82 29 80 37Q88 44 85 52L92 59 84 63 88 72 78 74 77 82 66 82 61 89 50 86 39 89 34 82 23 82 22 74 12 72 16 63 8 59 15 52Q12 44 20 37Z" fill="url(#fur)" stroke="#c8d3e2" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M24 42q8-6 16-2M60 40q8-4 16 2" stroke="#b6bfce" stroke-width="2" stroke-linecap="round"/>
+<path d="M29 64Q50 52 71 64Q76 82 50 85Q24 82 29 64Z" fill="#fffefd"/>
+<ellipse cx="24" cy="64" rx="5.5" ry="3" fill="#edbeca" fill-opacity=".8"/><ellipse cx="76" cy="64" rx="5.5" ry="3" fill="#edbeca" fill-opacity=".8"/>
+<path d="M29 53q5-7 10 0M61 53q5-7 10 0" stroke="#49414c" stroke-width="3.2" stroke-linecap="round"/>
+<path d="M45 64Q50 61 55 64Q55 68 50 70Q45 68 45 64Z" fill="#3b2c31"/><ellipse cx="48.8" cy="64" rx="1.6" ry=".7" fill="white" fill-opacity=".3"/>
+<path d="M50 69V73M50 72Q45 78 41 73M50 72Q55 78 59 73" stroke="#3b2c31" stroke-width="1.8" stroke-linecap="round"/><path d="M46 77Q50 81 54 77V80Q50 86 46 80Z" fill="#ed93a1"/>
+</g></svg>

@@ -1,11 +1,11 @@
 'use strict';
 
-const CACHE = 'puppy-pals-v1';
+const CACHE = 'puppy-pals-v2';
 const ASSETS = [
   '/', '/index.html', '/manifest.webmanifest', '/puppy-pals/styles.css', '/puppy-pals/app.js',
   '/puppy-pals/art/icon.svg', '/puppy-pals/art/garden.svg',
   '/puppy-pals/art/icon-192.png', '/puppy-pals/art/icon-512.png', '/puppy-pals/art/apple-touch-icon.png',
-  ...Array.from({ length: 6 }, (_, i) => `/puppy-pals/art/dog-${i}.svg`),
+  ...Array.from({ length: 12 }, (_, i) => `/puppy-pals/art/dog-${i}.svg`),
 ];
 const assetPaths = new Set(ASSETS);
 

@@ -1,6 +1,10 @@
 # Puppy Pals
 
-A dog-themed match-3 adventure with 100 levels, six puppy sprites, special matches, boosters, saved progress and optional PayPal attempt packs. The responsive TypeScript web app can be installed as a PWA; a Capacitor scaffold prepares for future Android and iPhone releases.
+A dog-themed match-3 adventure with 180 levels, twelve puppy sprites, special matches, gradually unlocked boosters, saved progress and optional PayPal attempt packs. The responsive TypeScript web app can be installed as a PWA; a Capacitor scaffold prepares for future Android and iPhone releases.
+
+The discovery campaign alternates helpful bonuses with new challenges: Paw pop at level 2 before grass at 8, Shuffle at 14 before dual-breed goals at 20, then opening move bonuses, double grass, Rainbow, special-making and cascade goals, extra picnic coins and an opening line blast. New puppies join the rotating board palettes as the journey grows. The first 72 levels form three roughly hour-long walks, targeting a discovery about every 15 minutes of active play at an assumed 2½ minutes per level. These are pacing estimates, not measured retention results or time gates. See [campaign pacing and unlocks](docs/progression.md).
+
+Existing 100-level saves expand without losing stars, inventory or the current board. An unfinished original run keeps its original rules; starting another level uses the discovery campaign. Players who already completed level 100 can continue at level 101. Discovery gifts are recorded once and included in progress backups.
 
 ```sh
 npm ci
@@ -16,6 +20,8 @@ For optional browser QA, with Playwright and Chromium available, start the serve
 `npm run test:loading` checks slow artwork loading, stable board cells during matches/refills, and exact saved-board restoration with normal and reduced motion. It uses the same browser prerequisites and `PUPPY_BASE_URL` override (default port 8080).
 
 `npm run test:sync` checks interrupted requests, stale server sessions, safe retries, offline level completion, storage failure recovery and downloadable backup restoration.
+
+`npm run test:progression` checks gradual booster gifts, old-save migration and exact boards, the expanded map, new challenges, mobile goal containment and offline puppy sprites.
 
 Puppy Pals is the home page. Existing Pong, Snake and Incremental games remain available at `/pong/`, `/snake/` and `/incremental/`. The original match-3 route redirects to Puppy Pals.
 

@@ -1,21 +1,19 @@
 import { PuppyGame, LEVELS, BREEDS, type Coord, type Snapshot, type TurnResult } from './engine';
 import { ProgressStore, type ProgressStatus } from './progress-storage';
+import { LEVEL_COUNT, CHAPTER_COUNT } from './levels';
+import { BOOSTER_UNLOCKS, BREED_UNLOCKS, DISCOVERIES, nextDiscovery, firstWinBonus, type Discovery } from './progression';
+import { emptySave, validateSave, type Booster, type Run, type Save } from './profile';
 
 async function boot() {
 
 const KEY = 'puppy-pals-save-v1';
 const ART = '/puppy-pals/art/';
-const TILE_COLORS = ['#fff0d9', '#f4e8d9', '#e2edf7', '#f6e5f0', '#efe5d2', '#eeebf7'];
+const TILE_COLORS = ['#fff0d9', '#f4e8d9', '#e2edf7', '#f6e5f0', '#efe5d2', '#eeebf7', '#f7edcc', '#e6e8f0', '#f6e0cf', '#eee0d1', '#e8f1f8', '#e5ece5'];
 const BOOSTERS = {
   paw: { name: 'Paw pop', cost: 40, description: 'Clear one puppy without using a move.' },
   shuffle: { name: 'Mix it up', cost: 60, description: 'Shuffle the board for a fresh start.' },
-  rainbow: { name: 'Rainbow', cost: 80, description: 'Turn a puppy into a rainbow paw.' },
+  rainbow: { name: 'Rainbow', cost: 80, description: 'Clear every puppy of your chosen breed.' },
 } as const;
-type Booster = keyof typeof BOOSTERS;
-type Action = { kind: 'swap'; a: Coord; b: Coord } | { kind: Booster; target?: Coord };
-type Run = { level: number; seed: number; actions: Action[]; attemptId: string | null; mode: 'online' | 'offline' | null; resultHandled: boolean; reservationId?: string };
-type OfflineWallet = { lives: number; nextLifeAt: number | null };
-type Save = { version: 1; savedAt?: number; unlocked: number; stars: number[]; best: number[]; coins: number; boosters: Record<Booster, number>; sound: boolean; dailyAt: number; run: Run | null; offlineWallet: OfflineWallet; pendingFinishes: { attemptId: string; outcome: string }[]; pendingPayment: string | null };
 type Wallet = { lives: number; maxLives: number; nextLifeAt: number | null; paidAttempts: number; totalAttempts: number; paymentsAvailable: boolean; activeAttempt: boolean; activeAttemptId: string | null; activeAttemptRequestId?: string | null; pack: { attempts: number; price: string; currency: string } };
 const paths: Record<string, string> = {
   paw: '<ellipse cx="12" cy="16.5" rx="5.5" ry="4.2"/><ellipse cx="5.4" cy="10" rx="2" ry="2.7" transform="rotate(-25 5.4 10)"/><ellipse cx="10" cy="6.3" rx="2" ry="2.7"/><ellipse cx="15.3" cy="6.7" rx="2" ry="2.7"/><ellipse cx="19.5" cy="10.8" rx="2" ry="2.7" transform="rotate(25 19.5 10.8)"/>',
@@ -48,39 +46,6 @@ const $ = <T extends HTMLElement = HTMLElement>(selector: string) => document.qu
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, matchMedia('(prefers-reduced-motion: reduce)').matches ? 1 : ms));
 const isNative = () => !!(window as any).Capacitor?.isNativePlatform?.() || ['capacitor:', 'ionic:'].includes(location.protocol);
 
-function emptySave(): Save {
-  return { version: 1, unlocked: 1, stars: Array(100).fill(0), best: Array(100).fill(0), coins: 120, boosters: { paw: 2, shuffle: 2, rainbow: 1 }, sound: false, dailyAt: 0, run: null, offlineWallet: { lives: 5, nextLifeAt: null }, pendingFinishes: [], pendingPayment: null };
-}
-function validateSave(data: any): Save | null {
-  const base = emptySave();
-  try {
-    if (!data || data.version !== 1 || typeof data !== 'object') return null;
-    if (!Number.isInteger(data.unlocked) || data.unlocked < 1 || data.unlocked > 100 || !Array.isArray(data.stars) || data.stars.length !== 100 || !Array.isArray(data.best) || data.best.length !== 100) return null;
-    const count = (v: unknown, max: number) => Number.isInteger(v) && Number(v) >= 0 ? Math.min(Number(v), max) : 0;
-    base.unlocked = Math.max(1, count(data.unlocked, 100));
-    base.coins = count(data.coins, 1e6);
-    base.sound = !!data.sound;
-    base.dailyAt = typeof data.dailyAt === 'number' ? data.dailyAt : 0;
-    if (Number.isFinite(data.savedAt)) base.savedAt = data.savedAt;
-    base.stars = base.stars.map((_, i) => count(data.stars?.[i], 3));
-    base.best = base.best.map((_, i) => count(data.best?.[i], 1e9));
-    for (const kind of Object.keys(BOOSTERS) as Booster[]) base.boosters[kind] = count(data.boosters?.[kind], 999);
-    if (data.offlineWallet) base.offlineWallet = { lives: count(data.offlineWallet.lives, 5), nextLifeAt: Number.isFinite(data.offlineWallet.nextLifeAt) ? data.offlineWallet.nextLifeAt : null };
-    if (Array.isArray(data.pendingFinishes)) base.pendingFinishes = data.pendingFinishes.filter((x: any) => typeof x.attemptId === 'string' && ['won', 'lost', 'abandoned'].includes(x.outcome)).slice(0, 20);
-    if (typeof data.pendingPayment === 'string') base.pendingPayment = data.pendingPayment;
-    if (data.run != null) {
-      if (!Number.isInteger(data.run.level) || data.run.level < 1 || data.run.level > base.unlocked || !Number.isInteger(data.run.seed) || !Array.isArray(data.run.actions) || data.run.actions.length > 1000) return null;
-      const coordinate = (value: any) => value && Number.isInteger(value.r) && Number.isInteger(value.c) && value.r >= 0 && value.r < 8 && value.c >= 0 && value.c < 8;
-      if (!data.run.actions.every((action: any) => action && (action.kind === 'swap' ? coordinate(action.a) && coordinate(action.b) : action.kind === 'shuffle' || (['paw', 'rainbow'].includes(action.kind) && coordinate(action.target))))) return null;
-      base.run = { level: data.run.level, seed: data.run.seed, actions: data.run.actions, attemptId: typeof data.run.attemptId === 'string' ? data.run.attemptId : null, mode: ['online', 'offline'].includes(data.run.mode) ? data.run.mode : null, resultHandled: !!data.run.resultHandled, ...(typeof data.run.reservationId === 'string' ? { reservationId: data.run.reservationId } : {}) };
-      const replay = new PuppyGame(base.run.level, base.run.seed);
-      for (const action of base.run.actions) {
-        if (!(action.kind === 'swap' ? replay.swap(action.a, action.b) : replay.useBooster(action.kind, action.target)).valid) return null;
-      }
-    }
-  } catch { return null; }
-  return base;
-}
 let appMounted = false;
 let progressStatus: ProgressStatus = { saved: false, savedAt: null, source: null };
 let savingProgress = true;
@@ -105,15 +70,15 @@ function persist() {
   });
 }
 const seed = () => crypto.getRandomValues(new Uint32Array(1))[0];
-function freshRun(level: number): Run { return { level, seed: seed(), actions: [], attemptId: null, mode: null, resultHandled: false }; }
+function freshRun(level: number): Run { return { level, seed: seed(), ruleset: 2, actions: [], attemptId: null, mode: null, resultHandled: false }; }
 let run: Run = save.run || freshRun(save.unlocked);
-let game = new PuppyGame(run.level, run.seed);
+let game = new PuppyGame(run.level, run.seed, run.ruleset ?? 1);
 try {
   for (const action of run.actions) {
     const result = action.kind === 'swap' ? game.swap(action.a, action.b) : game.useBooster(action.kind, action.target);
     if (!result.valid) throw new Error('Invalid saved move');
   }
-} catch { run = freshRun(save.unlocked); game = new PuppyGame(run.level, run.seed); }
+} catch { run = freshRun(save.unlocked); game = new PuppyGame(run.level, run.seed, run.ruleset ?? 1); }
 save.run = run;
 let selected: Coord | null = null;
 let activeBooster: Booster | null = null;
@@ -160,6 +125,42 @@ function status(message: string, important = false) {
   $('#game-status').innerHTML = `${icon(important ? 'paw' : 'bulb')}<span>${esc(message)}</span>`;
   $('#game-status').classList.toggle('important', important);
 }
+function boosterUnlocked(kind: Booster) { return save.unlocked >= BOOSTER_UNLOCKS[kind]; }
+function claimDiscoveries(notify = false) {
+  const newlyReached = DISCOVERIES.filter(discovery => discovery.level <= save.unlocked && !save.discoveries.includes(discovery.id));
+  for (const discovery of newlyReached) {
+    save.discoveries.push(discovery.id);
+    if (discovery.booster) save.boosters[discovery.booster] = Math.min(999, save.boosters[discovery.booster] + (discovery.amount || 1));
+  }
+  if (newlyReached.length) {
+    persist();
+    if (notify) toast(`A new discovery: ${newlyReached.map(discovery => discovery.title).join(' · ')}. Open your discovery journal to meet it.`);
+  }
+}
+function discoveryVisual(discovery: Discovery, unlocked = true) {
+  return discovery.breed !== undefined && unlocked
+    ? `<img src="${ART}dog-${discovery.breed}.svg" alt="${esc(BREEDS[discovery.breed].name)}">`
+    : icon(unlocked ? discovery.kind === 'challenge' ? 'grass' : discovery.booster || 'gift' : 'lock');
+}
+function renderDiscoveries() {
+  const reached = DISCOVERIES.filter(discovery => discovery.level === run.level);
+  const upcoming = nextDiscovery(save.unlocked);
+  const discovery = reached[0] || upcoming;
+  const bonus = run.ruleset === 2 ? [game.level.bonusMoves ? `+${game.level.bonusMoves} starting moves` : '', game.level.startingSpecial ? 'A free opening line blast' : '', firstWinBonus(run.level) ? `+${firstWinBonus(run.level)} coins on your first win` : ''].filter(Boolean).join(' · ') : '';
+  $('#discovery-banner').innerHTML = discovery
+    ? `<button class="discovery-preview ${reached.length ? 'new-discovery' : ''}" data-action="discoveries">${discoveryVisual(discovery, discovery.level <= save.unlocked)}<span><span class="discovery-eyebrow">${reached.length ? 'A new little discovery' : `Coming at level ${discovery.level}`}</span><strong>${esc(discovery.title)}</strong><span class="discovery-detail">${esc(reached.length ? discovery.description : bonus || 'A new friend, a little help, or a fresh challenge.')}</span></span>${icon('chevron')}</button>`
+    : `<button class="discovery-preview" data-action="discoveries">${icon('paw')}<span><span class="discovery-eyebrow">Your growing adventure</span><strong>Look how far your pack has come.</strong><span class="discovery-detail">${esc(bonus || 'Revisit your discoveries and favorite puppy pals.')}</span></span>${icon('chevron')}</button>`;
+  $('#breed-collection').innerHTML = BREEDS.map((breed, i) => {
+    const unlocked = save.unlocked >= BREED_UNLOCKS[i];
+    return `<div class="breed-swatch ${unlocked ? '' : 'breed-locked'}" data-breed="${i}"><div class="breed-picture" style="--tile-bg:${TILE_COLORS[i]}">${unlocked ? `<img src="${ART}dog-${i}.svg" alt="${esc(breed.name)}">` : icon('lock')}</div><span>${unlocked ? esc(breed.name) : `Level ${BREED_UNLOCKS[i]}`}</span></div>`;
+  }).join('');
+}
+function showDiscoveries() {
+  showModal('discoveries', `<h2>A little more to discover.</h2><p class="modal-subtitle">Meet new pups, try a helping paw, then put it to work. Every discovery waits for you to reach its level, at your own pace.</p><div class="journey-acts">${['First friends · 1–24', 'Growing together · 25–48', 'Puppy explorers · 49–72'].map((act, i) => `<div class="${save.unlocked >= i * 24 + 1 ? 'reached' : ''}"><span>WALK ${i + 1}</span><strong>${act}</strong></div>`).join('')}</div><div class="discovery-list">${DISCOVERIES.map(discovery => {
+    const unlocked = discovery.level <= save.unlocked;
+    return `<article class="discovery-card ${unlocked ? 'discovered' : 'discovery-locked'}" data-discovery="${discovery.id}"><div class="discovery-picture">${discoveryVisual(discovery, unlocked)}</div><div><span class="discovery-eyebrow">Level ${discovery.level} · ${unlocked ? 'Discovered' : 'Up ahead'}${discovery.kind === 'challenge' ? ' · Challenge' : ''}</span><h3>${esc(discovery.title)}</h3><p>${esc(discovery.description)}</p>${discovery.booster ? `<span class="discovery-gift">${discovery.amount || 1} free ${esc(BOOSTERS[discovery.booster].name)}${(discovery.amount || 1) > 1 ? ' boosts' : ' boost'}</span>` : ''}</div></article>`;
+  }).join('')}</div><p class="modal-note">No rush and no daily gates. Your discoveries and puppy collection stay saved with your adventure.</p>`, true);
+}
 
 function shell() {
   $('#app').innerHTML = `
@@ -169,7 +170,7 @@ function shell() {
   </header>
   <main class="layout">
     <aside class="sidebar" aria-label="Adventure navigation">
-      <nav class="nav-links"><button class="nav-button active" data-action="play">${icon('paw')}<span class="nav-label">Let's play</span></button><button class="nav-button" data-action="map">${icon('map')}<span class="nav-label">My adventure</span><span class="tiny-pill">100 levels</span></button><button class="nav-button" data-action="shop">${icon('bag')}<span class="nav-label">Treat shop</span></button></nav>
+      <nav class="nav-links"><button class="nav-button active" data-action="play">${icon('paw')}<span class="nav-label">Let's play</span></button><button class="nav-button" data-action="map">${icon('map')}<span class="nav-label">My adventure</span><span class="tiny-pill">${LEVEL_COUNT} levels</span></button><button class="nav-button" data-action="shop">${icon('bag')}<span class="nav-label">Treat shop</span></button></nav>
       <section class="adventure-card" id="sidebar-map" aria-label="Level map"></section>
       <section class="install-card"><h3>${icon('phone')}Your happy place, anywhere.</h3><p>Add Puppy Pals to your home screen for a little joy on the go.</p><button class="text-button" data-action="install">Get the app ${icon('chevron')}</button></section>
       <button class="nav-button" data-action="progress">${icon('cloud')}<span class="nav-label">Save & restore</span></button>
@@ -179,7 +180,7 @@ function shell() {
       <div class="welcome"><div class="eyebrow">${icon('paw')}A PAWSITIVELY LOVELY ADVENTURE</div><h1>A little match. <em>A lot of love.</em></h1><p>Bring your favorite puppy pals together, three at a time.</p></div>
       <section class="game-card">
         <div class="level-header"><div class="level-heading"><span class="level-badge">${icon('paw')}</span><div><div class="level-label" id="level-label"></div><h2 id="level-title"></h2></div></div><div class="level-tools"><button class="small-icon" data-action="restart" aria-label="Restart level">${icon('reset')}</button><div class="moves-box" id="moves-box"><strong class="moves-number" id="moves">24</strong><span class="moves-label">moves<br>left</span></div></div></div>
-        <div class="objectives" id="objectives" aria-label="Level goals"></div>
+        <div class="objectives" id="objectives" aria-label="Level goals"></div><section id="discovery-banner" class="discovery-banner" aria-label="Adventure discoveries"></section>
         <div class="board-wrap" data-loading="true"><div id="board" class="board" role="group" aria-label="8 by 8 dog matching board"></div><div class="board-loading" role="status">${icon('paw')}<span>Getting your pals ready…</span></div><div id="combo-area" aria-live="off"></div></div>
         <div id="game-status" class="game-status" role="status" aria-live="polite"></div>
         <div class="game-bottom"><div><span class="score-label">YOUR SCORE</span><strong class="score-value" id="score">0</strong></div><button class="hint-button" data-action="hint">${icon('bulb')} A little hint</button></div>
@@ -189,7 +190,7 @@ function shell() {
       <nav class="mobile-bottom" aria-label="Game menu"><button data-action="map">${icon('map')}Adventure</button><button data-action="help">${icon('help')}How to play</button><button data-action="sound" class="sound-toggle">${icon('mute')}Sound</button><button data-action="restart">${icon('reset')}Restart</button></nav>
     </section>
     <aside class="rightbar" aria-label="Your puppy pack">
-      <section class="pack-card"><div class="card-kicker">${icon('heart')}SIX FACES. INFINITE HAPPY.</div><h3>Meet your new best friends.</h3><p class="intro">Different pups. One lovable pack.<br>Match their faces to make their day.</p><div class="breed-grid">${BREEDS.map((breed, i) => `<div class="breed-swatch"><div class="breed-picture" style="--tile-bg:${TILE_COLORS[i]}"><img src="${ART}dog-${i}.svg" alt="${breed.name}"></div><span>${breed.name}</span></div>`).join('')}</div><div class="pack-divider"></div><div class="pack-note">${icon('paw')}Each breed has a different face and color.<br>Because every puppy is special.</div></section>
+      <section class="pack-card"><div class="card-kicker">${icon('heart')}YOUR GROWING PUPPY PACK</div><h3>Meet your new best friends.</h3><p class="intro">Different pups. One lovable pack.<br>Match their faces to make their day.</p><div class="breed-grid" id="breed-collection"></div><div class="pack-divider"></div><div class="pack-note">${icon('paw')}Each breed has a different face and color.<br>Because every puppy is special.</div></section>
       <section class="tip-card"><div class="card-kicker">${icon('bulb')}A LITTLE PUPPY WISDOM</div><h3>Good things come in threes.</h3><p>Swap two neighbors to match 3 pals.<br>Match 4 or 5 for a special surprise!</p><div class="match-demo"><img src="${ART}dog-0.svg" alt="Corgi"><img src="${ART}dog-0.svg" alt="Corgi"><img src="${ART}dog-0.svg" alt="Corgi"><span class="demo-result">${icon('heart')}</span></div></section>
       <div class="chapter-progress" id="campaign-progress"></div>
       <button class="daily-button" data-action="daily">${icon('gift')}<div><strong id="daily-label">Your daily little treat</strong><span id="daily-detail">50 treat coins + a free shuffle</span></div></button>
@@ -206,7 +207,7 @@ function renderSaveStatus() {
 }
 function mapHtml() {
   const start = (chapter - 1) * 10;
-  return `<div class="chapter-cover"><div class="chapter-caption"><div class="eyebrow">YOUR NEXT HAPPY PLACE</div><h3>${esc(LEVELS[start].chapterName)}</h3></div></div><div class="chapter-switcher"><button data-action="chapter-prev" aria-label="Previous chapter" ${chapter === 1 ? 'disabled' : ''}>${icon('back')}</button><span>Chapter ${chapter} of 10</span><button data-action="chapter-next" aria-label="Next chapter" ${chapter === 10 ? 'disabled' : ''}>${icon('chevron')}</button></div><div class="level-trail">${LEVELS.slice(start, start + 10).map(level => {
+  return `<div class="chapter-cover"><div class="chapter-caption"><div class="eyebrow">YOUR NEXT HAPPY PLACE</div><h3>${esc(LEVELS[start].chapterName)}</h3></div></div><div class="chapter-switcher"><button data-action="chapter-prev" aria-label="Previous chapter" ${chapter === 1 ? 'disabled' : ''}>${icon('back')}</button><span>Chapter ${chapter} of ${CHAPTER_COUNT}</span><button data-action="chapter-next" aria-label="Next chapter" ${chapter === CHAPTER_COUNT ? 'disabled' : ''}>${icon('chevron')}</button></div><div class="level-trail">${LEVELS.slice(start, start + 10).map(level => {
     const stars = save.stars[level.number - 1]; const locked = level.number > save.unlocked;
     return `<div class="trail-item"><button class="level-node ${level.number === run.level ? 'current' : stars ? 'complete' : ''}" data-action="level" data-level="${level.number}" ${locked ? 'disabled' : ''} aria-label="Level ${level.number}: ${esc(level.name)}${locked ? ', locked' : stars ? `, ${stars} stars` : ''}" ${level.number === run.level ? 'aria-current="step"' : ''}>${locked ? icon('lock') : level.number}</button><span aria-hidden="true" class="trail-stars ${stars ? '' : 'empty'}">${'★'.repeat(stars)}${'☆'.repeat(3 - stars)}</span></div>`;
   }).join('')}</div><div class="adventure-footer">${icon('lock')}A new adventure with every little win.</div>`;
@@ -215,7 +216,7 @@ function renderMap() {
   $('#sidebar-map').innerHTML = mapHtml();
   if (modalKind === 'map') $('#modal-map').innerHTML = mapHtml();
   const completed = save.stars.filter(Boolean).length;
-  $('#campaign-progress').innerHTML = `<div class="chapter-progress-top"><span>YOUR HAPPY LITTLE JOURNEY</span><strong>${completed} / 100</strong></div><div class="chapter-progress-track"><div class="chapter-progress-fill" style="width:${completed}%"></div></div><p>One match closer to a hundred<br>tail-wagging adventures.</p>`;
+  $('#campaign-progress').innerHTML = `<div class="chapter-progress-top"><span>YOUR HAPPY LITTLE JOURNEY</span><strong>${completed} / ${LEVEL_COUNT}</strong></div><div class="chapter-progress-track"><div class="chapter-progress-fill" style="width:${completed / LEVEL_COUNT * 100}%"></div></div><p>One match closer to ${LEVEL_COUNT}<br>tail-wagging adventures.</p>`;
 }
 function renderWallet() {
   const offline = localWallet();
@@ -228,9 +229,11 @@ function renderWallet() {
   for (const kind of Object.keys(BOOSTERS) as Booster[]) {
     $(`#count-${kind}`).textContent = String(save.boosters[kind]);
     const button = document.querySelector<HTMLButtonElement>(`.booster[data-booster="${kind}"]`)!;
-    button.disabled = busy || !artworkReady || displayed.won || displayed.lost;
+    button.hidden = !boosterUnlocked(kind);
+    button.disabled = !boosterUnlocked(kind) || busy || !artworkReady || displayed.won || displayed.lost;
     button.classList.toggle('selected', activeBooster === kind);
   }
+  $('.booster-panel').hidden = !Object.keys(BOOSTERS).some(kind => boosterUnlocked(kind as Booster));
   document.querySelectorAll<HTMLButtonElement>('.sound-toggle').forEach(button => {
     button.innerHTML = icon(save.sound ? 'sound' : 'mute') + (button.closest('.mobile-bottom') ? 'Sound' : '');
     button.setAttribute('aria-label', save.sound ? 'Turn sound off' : 'Turn sound on'); button.setAttribute('aria-pressed', String(save.sound));
@@ -238,7 +241,7 @@ function renderWallet() {
   const available = Date.now() - save.dailyAt >= 86400000;
   $('.daily-button').toggleAttribute('disabled', !available);
   $('#daily-label').textContent = available ? 'Your daily little treat' : 'A treat well deserved!';
-  $('#daily-detail').textContent = available ? '50 treat coins + a free shuffle' : 'Come back tomorrow for more';
+  $('#daily-detail').textContent = available ? boosterUnlocked('shuffle') ? '50 treat coins + a free shuffle' : '50 treat coins for your adventure' : 'Come back tomorrow for more';
   if (modalKind === 'shop') updateShopCountdown();
 }
 function renderHud(snapshot: Snapshot) {
@@ -248,8 +251,8 @@ function renderHud(snapshot: Snapshot) {
   $('#moves-box').classList.toggle('low', snapshot.moves <= 5);
   $('#score').textContent = fmt(snapshot.score);
   $('#objectives').innerHTML = snapshot.objectives.map(goal => {
-    const visual = goal.kind === 'collect' ? `<img src="${ART}dog-${goal.breed}.svg" alt="">` : icon(goal.kind === 'grass' ? 'grass' : 'star');
-    const label = goal.kind === 'collect' ? BREEDS[goal.breed!].name + ' pals' : goal.kind === 'grass' ? 'Clear grass' : 'Score goal';
+    const visual = goal.kind === 'collect' ? `<img src="${ART}dog-${goal.breed}.svg" alt="">` : icon(goal.kind === 'grass' ? 'grass' : goal.kind === 'special' ? 'blast' : goal.kind === 'cascade' ? 'shuffle' : 'star');
+    const label = goal.kind === 'collect' ? BREEDS[goal.breed!].name + ' pals' : goal.kind === 'grass' ? 'Clear grass' : goal.kind === 'special' ? 'Make specials' : goal.kind === 'cascade' ? 'Cascade matches' : 'Score goal';
     return `<div class="objective ${goal.kind} ${goal.current >= goal.target ? 'done' : ''}" aria-label="${label}: ${Math.min(goal.current, goal.target)} of ${goal.target}">${visual}<div class="objective-copy"><span class="label">${label}</span><div class="count">${fmt(Math.min(goal.current, goal.target))} <span>/ ${fmt(goal.target)}</span></div><div class="objective-track"><div class="objective-fill" style="width:${Math.min(100, goal.current / goal.target * 100)}%"></div></div></div></div>`;
   }).join('');
 }
@@ -317,7 +320,7 @@ async function prepareArtwork() {
   artworkReady = true; $('.board-wrap').dataset.loading = 'false';
   renderBoard(displayed); renderWallet();
 }
-function renderAll() { displayed = game.snapshot(); renderHud(displayed); renderBoard(displayed); renderMap(); renderWallet(); }
+function renderAll() { displayed = game.snapshot(); renderHud(displayed); renderBoard(displayed); renderMap(); renderWallet(); renderDiscoveries(); }
 function localWallet() {
   const state = save.offlineWallet;
   if (state.lives < 5 && !state.nextLifeAt) state.nextLifeAt = Date.now() + 1800000;
@@ -458,7 +461,7 @@ async function doSwap(a: Coord, b: Coord) {
   finally { busy = false; renderAll(); }
 }
 async function doBooster(kind: Booster, target?: Coord) {
-  if (busy || !artworkReady || !save.boosters[kind] || displayed.won || displayed.lost) return;
+  if (busy || !artworkReady || !boosterUnlocked(kind) || !save.boosters[kind] || displayed.won || displayed.lost) return;
   busy = true; selected = null; activeBooster = null; renderWallet();
   try {
     if (!await ensureAttempt()) return;
@@ -487,15 +490,16 @@ async function checkResult() {
       const firstWin = !save.stars[run.level - 1];
       save.stars[run.level - 1] = Math.max(stars, save.stars[run.level - 1]);
       save.best[run.level - 1] = Math.max(final.score, save.best[run.level - 1]);
-      save.unlocked = Math.min(100, Math.max(save.unlocked, run.level + 1));
-      save.coins += firstWin ? 40 + stars * 20 : 10;
+      save.unlocked = Math.min(LEVEL_COUNT, Math.max(save.unlocked, run.level + 1));
+      save.coins += firstWin ? 40 + stars * 20 + firstWinBonus(run.level) : 10;
+      claimDiscoveries(true);
     }
     persist(); await finishAttempt(final.won ? 'won' : 'lost');
   }
   showResult(final.won);
 }
 function startLevel(level: number) {
-  if (level < 1 || level > save.unlocked || level > 100) return;
+  if (level < 1 || level > save.unlocked || level > LEVEL_COUNT) return;
   run = freshRun(level); game = new PuppyGame(level, run.seed); save.run = run;
   selected = null; activeBooster = null; chapter = game.level.chapter; persist(); closeModal(); renderAll();
   status(level === 1 ? 'Tap two neighbors or swipe. Match three to make new pals.' : game.level.description);
@@ -518,7 +522,7 @@ function hint() {
 function showModal(kind: string, content: string, wide = false) {
   closeModal(false); previousFocus = document.activeElement as HTMLElement; modalKind = kind;
   const layer = document.createElement('div'); layer.className = 'modal-layer';
-  layer.innerHTML = `<section class="modal ${wide ? 'wide' : ''}" role="dialog" aria-modal="true" aria-label="${kind === 'shop' ? 'Treat shop and extra attempts' : kind === 'map' ? '100-level adventure' : 'Puppy Pals'}"><button class="modal-close" data-action="close" aria-label="Close dialog">${icon('close')}</button>${content}</section>`;
+  layer.innerHTML = `<section class="modal ${wide ? 'wide' : ''}" role="dialog" aria-modal="true" aria-label="${kind === 'shop' ? 'Treat shop and extra attempts' : kind === 'map' ? `${LEVEL_COUNT}-level adventure` : 'Puppy Pals'}"><button class="modal-close" data-action="close" aria-label="Close dialog">${icon('close')}</button>${content}</section>`;
   layer.addEventListener('click', event => { if (event.target === layer) closeModal(); });
   document.body.append(layer); document.body.style.overflow = 'hidden'; layer.querySelector<HTMLButtonElement>('button')?.focus();
 }
@@ -530,7 +534,7 @@ function showResult(won: boolean) {
   const snap = game.snapshot();
   if (won) { sound('win'); confetti(); }
   const stars = won ? (snap.moves >= game.level.moves * .35 ? 3 : snap.moves >= game.level.moves * .15 ? 2 : 1) : 0;
-  showModal('result', `<img class="modal-hero" src="${ART}dog-${won ? 0 : 4}.svg" alt="${won ? 'Happy Corgi' : 'Hopeful Pug'}"><h2>${won ? run.level === 100 ? 'A hundred happy adventures!' : 'Pawsitively brilliant!' : 'So close, little pal.'}</h2><p class="modal-subtitle">${won ? run.level === 100 ? 'You’ve completed every level. Your puppy pack couldn’t be prouder!' : `Level ${run.level} complete. A whole pack of happy tails!` : 'You’re out of moves, but the puppies believe in you. Give it another go.'}</p>${won ? `<div class="result-stars" aria-label="${stars} stars">${[1, 2, 3].map(n => icon('star', n > stars ? 'empty' : '')).join('')}</div>` : ''}<div class="result-stats"><div><strong>${fmt(snap.score)}</strong><span>YOUR SCORE</span></div><div><strong>${won ? snap.moves : wallet?.totalAttempts ?? localWallet().lives}</strong><span>${won ? 'MOVES LEFT' : 'ATTEMPTS LEFT'}</span></div></div><button class="primary-button" data-action="${won && run.level < 100 ? 'next' : 'retry'}">${won ? run.level < 100 ? 'Meet the next adventure' : 'Play this level again' : 'Try again'} ${icon('chevron')}</button><button class="secondary-button" data-action="${won ? 'map' : 'shop'}">${icon(won ? 'map' : 'heart')}${won ? 'Explore your adventure' : 'More attempts'}</button><p class="modal-note">${won ? 'You keep your attempt when you win. Good dog!' : 'Free lives refill every 30 minutes. Take a little break anytime.'}</p>`);
+  showModal('result', `<img class="modal-hero" src="${ART}dog-${won ? 0 : 4}.svg" alt="${won ? 'Happy Corgi' : 'Hopeful Pug'}"><h2>${won ? run.level === LEVEL_COUNT ? `${LEVEL_COUNT} happy adventures!` : 'Pawsitively brilliant!' : 'So close, little pal.'}</h2><p class="modal-subtitle">${won ? run.level === LEVEL_COUNT ? 'You’ve completed every level. Your puppy pack couldn’t be prouder!' : `Level ${run.level} complete. A whole pack of happy tails!` : 'You’re out of moves, but the puppies believe in you. Give it another go.'}</p>${won ? `<div class="result-stars" aria-label="${stars} stars">${[1, 2, 3].map(n => icon('star', n > stars ? 'empty' : '')).join('')}</div>` : ''}<div class="result-stats"><div><strong>${fmt(snap.score)}</strong><span>YOUR SCORE</span></div><div><strong>${won ? snap.moves : wallet?.totalAttempts ?? localWallet().lives}</strong><span>${won ? 'MOVES LEFT' : 'ATTEMPTS LEFT'}</span></div></div><button class="primary-button" data-action="${won && run.level < LEVEL_COUNT ? 'next' : 'retry'}">${won ? run.level < LEVEL_COUNT ? 'Meet the next adventure' : 'Play this level again' : 'Try again'} ${icon('chevron')}</button><button class="secondary-button" data-action="${won ? 'map' : 'shop'}">${icon(won ? 'map' : 'heart')}${won ? 'Explore your adventure' : 'More attempts'}</button><p class="modal-note">${won ? 'You keep your attempt when you win. Good dog!' : 'Free lives refill every 30 minutes. Take a little break anytime.'}</p>`);
 }
 function showHelp() {
   showModal('help', `<img class="modal-hero" src="${ART}dog-2.svg" alt="Husky"><h2>Small matches. Big smiles.</h2><p class="modal-subtitle">Welcome to your happy little corner of the world.</p><div class="help-list"><div class="help-step"><span class="step-num">1</span><div><strong>Bring the pack together</strong><p>Tap two neighboring puppies, or swipe, to swap them. Match 3 or more of the same breed. On a keyboard, use arrows and Enter to choose.</p></div></div><div class="help-step"><span class="step-num">2</span><div><strong>Every level has a little mission</strong><p>Collect the puppies shown above the board, reach your score goal, or match over green grass to clear it. Finish every goal before your moves run out.</p></div></div><div class="help-step"><span class="step-num">3</span><div><strong>Make something pawsome</strong><p>Match 4 for a line blast, an L or T for a puppy burst, or 5 for a rainbow paw. Swap two specials for a bigger surprise!</p></div></div></div><div class="special-guide"><div>${icon('shuffle')}<strong>Match 4</strong><span>Clear a whole line</span></div><div>${icon('blast')}<strong>Match L or T</strong><span>A big puppy burst</span></div><div>${icon('rainbow')}<strong>Match 5</strong><span>Rainbow magic</span></div></div><p class="modal-note">Start with 5 free lives. One returns every 30 minutes. Wins keep your attempt; leaving a level or running out of moves uses it. Progress stays in this browser.</p><button class="primary-button" data-action="close" style="margin-top:19px">Let’s make some pals ${icon('paw')}</button>`);
@@ -538,7 +542,7 @@ function showHelp() {
 function showShop() {
   const native = isNative();
   const available = connected && !!wallet?.paymentsAvailable && !native;
-  showModal('shop', `<h2>A little extra love.</h2><p class="modal-subtitle">Another chance to bring the pack together.</p><div class="life-row" aria-label="${connected ? wallet?.lives : localWallet().lives} free lives">${[0, 1, 2, 3, 4].map(i => icon('heart', i >= (connected ? wallet?.lives ?? 0 : localWallet().lives) ? 'empty' : '')).join('')}</div><p class="refill-time" id="refill-time"></p><div class="purchase-card"><div class="purchase-icon">${icon('heart')}</div><div class="purchase-detail"><strong>5 extra attempts</strong><span>Yours to use, whenever you like.</span></div><strong class="purchase-price">$0.99</strong></div><button class="primary-button paypal-button" data-action="purchase" ${available ? '' : 'disabled'}>Get 5 attempts with <span class="paypal-mark">PayPal</span></button><div class="shop-note">${native ? 'Purchases will be available through your app store in a future update. You can always play with free refilling lives.' : available ? 'A one-time purchase of $0.99 USD. No subscription. Attempts are added after PayPal confirms payment.' : 'Paid checkout is not available yet. Your free lives still refill every 30 minutes, and winning keeps your attempt.'}</div>${!native ? '<p class="merchant-line">PayPal merchant: jasonwilliams1204@gmail.com</p>' : ''}${save.pendingPayment && connected && !native ? '<button class="secondary-button" data-action="check-payment">Check a previous payment</button>' : ''}<h3 class="shop-heading">A helping paw · ${fmt(save.coins)} treat coins</h3><div class="shop-boosters">${(Object.entries(BOOSTERS) as [Booster, typeof BOOSTERS[Booster]][]).map(([kind, info]) => `<button class="shop-booster" data-action="buy-booster" data-booster="${kind}" ${save.coins < info.cost ? 'disabled' : ''} aria-label="Buy ${info.name} for ${info.cost} treat coins"><span class="booster-icon ${kind}">${icon(kind)}</span><strong>${info.name}</strong><span class="cost">${icon('coin')}${info.cost}</span></button>`).join('')}</div><p class="modal-note">Earn treat coins by completing levels. Boosters never use a move.<br>Attempts and purchases are linked to this browser’s session. Keep its cookies to keep your balance.</p>`);
+  showModal('shop', `<h2>A little extra love.</h2><p class="modal-subtitle">Another chance to bring the pack together.</p><div class="life-row" aria-label="${connected ? wallet?.lives : localWallet().lives} free lives">${[0, 1, 2, 3, 4].map(i => icon('heart', i >= (connected ? wallet?.lives ?? 0 : localWallet().lives) ? 'empty' : '')).join('')}</div><p class="refill-time" id="refill-time"></p><div class="purchase-card"><div class="purchase-icon">${icon('heart')}</div><div class="purchase-detail"><strong>5 extra attempts</strong><span>Yours to use, whenever you like.</span></div><strong class="purchase-price">$0.99</strong></div><button class="primary-button paypal-button" data-action="purchase" ${available ? '' : 'disabled'}>Get 5 attempts with <span class="paypal-mark">PayPal</span></button><div class="shop-note">${native ? 'Purchases will be available through your app store in a future update. You can always play with free refilling lives.' : available ? 'A one-time purchase of $0.99 USD. No subscription. Attempts are added after PayPal confirms payment.' : 'Paid checkout is not available yet. Your free lives still refill every 30 minutes, and winning keeps your attempt.'}</div>${!native ? '<p class="merchant-line">PayPal merchant: jasonwilliams1204@gmail.com</p>' : ''}${save.pendingPayment && connected && !native ? '<button class="secondary-button" data-action="check-payment">Check a previous payment</button>' : ''}<h3 class="shop-heading">A helping paw · ${fmt(save.coins)} treat coins</h3><div class="shop-boosters">${(Object.entries(BOOSTERS) as [Booster, typeof BOOSTERS[Booster]][]).filter(([kind]) => boosterUnlocked(kind)).map(([kind, info]) => `<button class="shop-booster" data-action="buy-booster" data-booster="${kind}" ${save.coins < info.cost ? 'disabled' : ''} aria-label="Buy ${info.name} for ${info.cost} treat coins"><span class="booster-icon ${kind}">${icon(kind)}</span><strong>${info.name}</strong><span class="cost">${icon('coin')}${info.cost}</span></button>`).join('')}</div><p class="modal-note">${Object.keys(BOOSTERS).some(kind => !boosterUnlocked(kind as Booster)) ? `A new helping paw arrives at level ${BOOSTER_UNLOCKS[(Object.keys(BOOSTERS) as Booster[]).find(kind => !boosterUnlocked(kind))!]}. ` : ''}Earn treat coins by completing levels. Boosters never use a move.<br>Attempts and purchases are linked to this browser’s session. Keep its cookies to keep your balance.</p>`);
   updateShopCountdown();
 }
 function updateShopCountdown() {
@@ -549,7 +553,7 @@ function updateShopCountdown() {
   if (lives === 5) el.textContent = 'Your free lives are full. Happy matching!' + paid;
   else if (next) { const seconds = Math.max(0, Math.ceil((next - Date.now()) / 1000)); el.textContent = `Next free life in ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}` + paid; }
 }
-function showMap() { showModal('map', '<h2>Your happy little journey.</h2><p class="modal-subtitle">100 levels. Six best friends. A whole lot of love.</p><div class="map-modal" id="modal-map"></div>', true); renderMap(); }
+function showMap() { showModal('map', `<h2>Your happy little journey.</h2><p class="modal-subtitle">${LEVEL_COUNT} levels. ${BREEDS.length} best friends. New discoveries along the way.</p><button class="text-button journey-link" data-action="discoveries">${icon('gift')}Your discovery journal ${icon('chevron')}</button><div class="map-modal" id="modal-map"></div>`, true); renderMap(); }
 function showProgress() {
   const completed = save.stars.filter(Boolean).length;
   const savedTime = progressStatus.savedAt ? new Date(progressStatus.savedAt).toLocaleString() : 'Saving your latest move';
@@ -574,7 +578,7 @@ function downloadProgress() {
 }
 function restoredGame(profile: Save): { run: Run; game: PuppyGame } {
   const restoredRun = profile.run || freshRun(profile.unlocked);
-  const restored = new PuppyGame(restoredRun.level, restoredRun.seed);
+  const restored = new PuppyGame(restoredRun.level, restoredRun.seed, restoredRun.ruleset ?? 1);
   for (const action of restoredRun.actions) {
     const result = action.kind === 'swap' ? restored.swap(action.a, action.b) : restored.useBooster(action.kind, action.target);
     if (!result.valid) throw new Error('This backup contains a move that cannot be restored. Your current game is safe.');
@@ -603,7 +607,7 @@ async function importProgress() {
     if (run.attemptId) await finishAttempt('abandoned');
     const keep = { offlineWallet: save.offlineWallet, pendingFinishes: save.pendingFinishes, pendingPayment: save.pendingPayment };
     Object.assign(save, importedProgress, keep);
-    run = recovered.run; game = recovered.game; save.run = run;
+    run = recovered.run; game = recovered.game; save.run = run; claimDiscoveries();
     selected = null; activeBooster = null; chapter = game.level.chapter; importedProgress = null;
     persist(); closeModal(); renderAll(); status('Welcome back! Your puppy adventure is restored.', true);
     finished = displayed.won || displayed.lost;
@@ -657,25 +661,27 @@ document.addEventListener('click', event => {
   else if (action === 'help') showHelp();
   else if (action === 'shop') showShop();
   else if (action === 'map') showMap();
+  else if (action === 'discoveries') showDiscoveries();
   else if (action === 'play') { if (displayed.won || displayed.lost) showResult(displayed.won); else $('#board').scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
   else if (action === 'sound') { save.sound = !save.sound; persist(); renderWallet(); sound('tap'); }
   else if (action === 'hint') hint();
   else if (action === 'restart' || action === 'retry') requestLevel(run.level);
-  else if (action === 'next') startLevel(Math.min(100, run.level + 1));
+  else if (action === 'next') startLevel(Math.min(LEVEL_COUNT, run.level + 1));
   else if (action === 'level') requestLevel(Number(button.dataset.level));
   else if (action === 'confirm-level') { if (!busy) { busy = true; void finishAttempt('abandoned').then(() => { busy = false; startLevel(Number(button.dataset.level)); }); } }
-  else if (action === 'chapter-prev' || action === 'chapter-next') { chapter = Math.max(1, Math.min(10, chapter + (action === 'chapter-next' ? 1 : -1))); renderMap(); }
+  else if (action === 'chapter-prev' || action === 'chapter-next') { chapter = Math.max(1, Math.min(CHAPTER_COUNT, chapter + (action === 'chapter-next' ? 1 : -1))); renderMap(); }
   else if (action === 'booster') {
     if (busy || displayed.won || displayed.lost) return;
     const kind = button.dataset.booster as Booster;
+    if (!boosterUnlocked(kind)) return;
     if (!save.boosters[kind]) { showShop(); return; }
     if (kind === 'shuffle') void doBooster(kind);
     else { activeBooster = activeBooster === kind ? null : kind; selected = null; renderBoard(displayed); renderWallet(); status(activeBooster ? `Choose a puppy. ${BOOSTERS[kind].description}` : 'Tap two neighboring puppies to swap.', !!activeBooster); }
   } else if (action === 'buy-booster') {
     const kind = button.dataset.booster as Booster;
-    if (save.coins >= BOOSTERS[kind].cost) { save.coins -= BOOSTERS[kind].cost; save.boosters[kind]++; persist(); renderWallet(); showShop(); toast(`${BOOSTERS[kind].name} added to your helping paws.`); }
+    if (boosterUnlocked(kind) && save.coins >= BOOSTERS[kind].cost) { save.coins -= BOOSTERS[kind].cost; save.boosters[kind]++; persist(); renderWallet(); showShop(); toast(`${BOOSTERS[kind].name} added to your helping paws.`); }
   } else if (action === 'daily') {
-    if (Date.now() - save.dailyAt >= 86400000) { save.coins += 50; save.boosters.shuffle++; save.dailyAt = Date.now(); persist(); renderWallet(); toast('A treat for a good pal: 50 coins and one shuffle. Come back in 24 hours!'); }
+    if (Date.now() - save.dailyAt >= 86400000) { save.coins += 50; if (boosterUnlocked('shuffle')) save.boosters.shuffle++; save.dailyAt = Date.now(); persist(); renderWallet(); toast(boosterUnlocked('shuffle') ? 'A treat for a good pal: 50 coins and one shuffle.' : 'A treat for a good pal: 50 coins for your adventure.'); }
   } else if (action === 'purchase') void purchase();
   else if (action === 'check-payment' && save.pendingPayment) void capture(save.pendingPayment);
   else if (action === 'install') void install();
@@ -697,6 +703,7 @@ window.addEventListener('beforeinstallprompt', event => { event.preventDefault()
 window.addEventListener('online', () => { void refreshWallet(); });
 window.addEventListener('offline', () => { connected = false; renderWallet(); });
 
+claimDiscoveries();
 shell(); appMounted = true; renderAll(); status('Tap two neighbors or swipe. Match three to make new pals.');
 void prepareArtwork();
 const board = $('#board');

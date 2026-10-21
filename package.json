@@ -1,7 +1,7 @@
 {
   "name": "puppy-pals",
   "version": "1.0.0",
-  "description": "A dog-themed match-3 adventure with 100 levels and optional verified PayPal attempt packs.",
+  "description": "A dog-themed match-3 adventure with 180 levels, gradual discoveries and optional verified PayPal attempt packs.",
   "main": "dist/server.js",
   "scripts": {
     "build": "node scripts/build.mjs",
@@ -12,7 +12,8 @@
     "cap:sync": "npm run build:mobile && cap sync",
     "test:browser": "node tests/browser-smoke.mjs",
     "test:loading": "node tests/board-loading.browser.mjs",
-    "test:sync": "node tests/sync-progress.browser.mjs"
+    "test:sync": "node tests/sync-progress.browser.mjs",
+    "test:progression": "node tests/progression.browser.mjs"
   },
   "keywords": [],
   "author": "",

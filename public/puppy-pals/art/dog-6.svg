@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none" role="img" aria-label="Golden Retriever">
+<title>Golden Retriever</title>
+<defs>
+<linearGradient id="fur" x1="35" y1="19" x2="64" y2="88" gradientUnits="userSpaceOnUse"><stop stop-color="#f7d78f"/><stop offset="1" stop-color="#dba84f"/></linearGradient>
+<linearGradient id="cream" x1="50" y1="41" x2="50" y2="89" gradientUnits="userSpaceOnUse"><stop stop-color="#fffdf6"/><stop offset="1" stop-color="#f7e8d5"/></linearGradient>
+<filter id="shadow" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy="3" stdDeviation="2" flood-color="#48352b" flood-opacity=".16"/></filter>
+</defs>
+<g filter="url(#shadow)">
+<path d="M29 29Q16 21 8 39L9 69Q12 87 24 79L34 45ZM71 29Q84 21 92 39L91 69Q88 87 76 79L66 45Z" fill="#c58c3b"/>
+<path d="M13 42q-2 17 5 28M87 42q2 17-5 28" stroke="#dfb369" stroke-width="4" stroke-linecap="round"/>
+<path d="M21 47Q19 26 40 24L47 18 49 25 57 20 60 26Q81 27 79 47L82 65 77 64Q76 84 50 89Q24 84 23 64L18 65Z" fill="url(#fur)"/>
+<path d="M26 41q7-5 14-1M60 40q7-4 14 1" stroke="#b48742" stroke-width="2.5" stroke-linecap="round"/>
+<path d="M36 61Q50 54 64 61Q78 72 65 82L58 82 50 88 42 82 35 82Q22 72 36 61Z" fill="#fae6b3"/>
+<ellipse cx="27" cy="64" rx="5" ry="3" fill="#e9a481" fill-opacity=".65"/><ellipse cx="73" cy="64" rx="5" ry="3" fill="#e9a481" fill-opacity=".65"/>
+<ellipse cx="34" cy="52" rx="5.3" ry="6" fill="#382d35"/><ellipse cx="66" cy="52" rx="5.3" ry="6" fill="#382d35"/><circle cx="32.5" cy="50" r="1.7" fill="white"/><circle cx="64.5" cy="50" r="1.7" fill="white"/><circle cx="35.9" cy="54.3" r=".8" fill="white" fill-opacity=".7"/><circle cx="67.9" cy="54.3" r=".8" fill="white" fill-opacity=".7"/>
+<path d="M45 64Q50 61 55 64Q55 68 50 70Q45 68 45 64Z" fill="#3b2c31"/><ellipse cx="48.8" cy="64" rx="1.6" ry=".7" fill="white" fill-opacity=".3"/>
+<path d="M50 69V73M50 72Q45 78 41 73M50 72Q55 78 59 73" stroke="#3b2c31" stroke-width="1.8" stroke-linecap="round"/><path d="M46 77Q50 81 54 77V80Q50 86 46 80Z" fill="#ed93a1"/>
+</g></svg>

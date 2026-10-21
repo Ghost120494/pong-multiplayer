@@ -1,10 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { PuppyGame, LEVELS, BREEDS, analyzeMatches, findLegalMove, type Board, type Coord, type Snapshot, type TurnResult } from '../src/puppy/engine';
-import { getLevel } from '../src/puppy/levels';
+import { getLevel, LEGACY_LEVELS } from '../src/puppy/levels';
 
 function emptyFixture(seed = 42): PuppyGame {
-  const game = new PuppyGame(1, seed);
+  const game = new PuppyGame(1, seed, 1);
   const state = game as any;
   state.board = Array.from({ length: 8 }, (_, r) => Array.from({ length: 8 }, (_, c) => ({ id: r * 8 + c + 1, breed: (r * 2 + c) % 6, special: null })));
   state.grass = Array.from({ length: 8 }, () => Array(8).fill(0));
@@ -33,24 +34,26 @@ function validateSettled(snapshot: Snapshot): void {
   assert.equal(analyzeMatches(snapshot.board).length, 0, 'all cascades settle');
 }
 
-test('campaign defines all 100 distinct levels and coherent grass goals', () => {
-  assert.equal(LEVELS.length, 100);
-  assert.equal(BREEDS.length, 6);
-  assert.equal(new Set(LEVELS.map(level => level.name)).size, 100);
-  assert.equal(new Set(LEVELS.map(level => level.chapter)).size, 10);
-  assert.equal(LEVELS[0].moves, 24);
-  assert.deepEqual(LEVELS[0].objectives, [{ kind: 'collect', breed: 0, target: 12 }, { kind: 'score', target: 900 }]);
-  for (const level of LEVELS) {
-    assert(level.moves >= 24 && level.moves <= 34);
+test('campaign defines 180 distinct levels and keeps the original 100 definitions available', () => {
+  assert.equal(LEVELS.length, 180);
+  assert.equal(BREEDS.length, 12);
+  assert.equal(new Set(LEVELS.map(level => level.name)).size, 180);
+  assert.equal(new Set(LEVELS.map(level => level.chapter)).size, 18);
+  assert.equal(LEGACY_LEVELS.length, 100);
+  assert.equal(LEGACY_LEVELS[0].moves, 24);
+  assert.deepEqual(LEGACY_LEVELS[0].objectives, [{ kind: 'collect', breed: 0, target: 12 }, { kind: 'score', target: 900 }]);
+  for (const level of [...LEVELS, ...LEGACY_LEVELS]) {
+    assert(Number.isInteger(level.moves) && level.moves > 0);
     assert(level.objectives.length >= 2);
     assert(level.objectives.every(goal => goal.target > 0));
     const grass = level.objectives.find(goal => goal.kind === 'grass');
     assert.equal(grass?.target ?? 0, level.grassCount * level.grassLayers);
   }
-  for (const invalid of [0, 101, 1.5, NaN]) assert.throws(() => getLevel(invalid), RangeError);
+  for (const invalid of [0, 181, 1.5, NaN]) assert.throws(() => getLevel(invalid), RangeError);
+  assert.throws(() => getLevel(101, 1), RangeError);
 });
 
-test('all 100 levels open without matches and permit a real scoring move', () => {
+test('all 180 levels open without matches and permit a real scoring move', () => {
   for (const level of LEVELS) {
     const game = new PuppyGame(level.number, level.number * 7919);
     const before = game.snapshot();
@@ -61,7 +64,7 @@ test('all 100 levels open without matches and permit a real scoring move', () =>
     const result = game.swap(hint.a, hint.b);
     assert(result.valid, `level ${level.number}'s hint is a valid swap`);
     assert(result.scoreGained >= 180);
-    assert.equal(game.snapshot().moves, level.moves - 1);
+    assert.equal(game.snapshot().moves, level.moves + (level.bonusMoves ?? 0) - 1);
     validateSettled(game.snapshot());
   }
 });
@@ -79,12 +82,131 @@ test('every campaign level can play all the way to a win or exhausted attempts w
       assert(result.combos > 0);
       validateSettled(game.snapshot());
       turns++;
-      assert(turns <= level.moves, 'each successful swap spends exactly one move');
+      assert(turns <= level.moves + (level.bonusMoves ?? 0), 'each successful swap spends exactly one move');
     }
     assert.notEqual(game.snapshot().won, game.snapshot().lost);
     totalTurns += turns;
   }
   assert(totalTurns > 1000, 'the campaign exercises substantial real play, not zero-turn checks');
+});
+
+test('legacy saves replay their original boards, moves and booster histories exactly', () => {
+  // Captured from the shipped engine before the expanded campaign was added.
+  const originals = [
+    [1, '4eceec92487ad2dea581c75b7a30e64bdab5a76181c8dfe1bb967a9454f85fe8'],
+    [4, '76fad756dd30f0b070219d0b87d2325e2afe3969ba006f83cd9a51102ffa352d'],
+    [37, 'ad9b54b5a682adb41b0ce5e78132ee3355b78a58b558381b7b549c36a64b7be9'],
+    [60, 'be9f27585076f7eba7c33b7d5ac9d71b8f99e7d2dffd85118ff7afbb3afed6fc'],
+    [100, 'ae649737b883d920685fd0e41a792af85643675c5b681579c8a91fab35025b71'],
+  ] as const;
+  for (const [level, expected] of originals) {
+    const game = new PuppyGame(level, level * 7919, 1);
+    const snapshots = [game.snapshot()];
+    for (let i = 0; i < 8 && !game.snapshot().won && !game.snapshot().lost; i++) {
+      let result: TurnResult;
+      if (i === 1) result = game.useBooster('paw', { r: 0, c: 0 });
+      else if (i === 3) result = game.useBooster('shuffle');
+      else if (i === 5) result = game.useBooster('rainbow', { r: 4, c: 4 });
+      else { const move = game.hint()!; result = game.swap(move.a, move.b); }
+      assert(result.valid);
+      snapshots.push(game.snapshot());
+    }
+    const actual = createHash('sha256').update(JSON.stringify(snapshots)).digest('hex');
+    assert.equal(actual, expected, `level ${level}'s existing save stays unchanged`);
+  }
+});
+
+test('rotating puppy pools stay bounded through refills, specials and shuffle', () => {
+  for (const level of LEVELS.filter(level => level.breedPool?.some(breed => breed >= 6))) {
+    const pool = level.breedPool!;
+    assert(pool.length >= 5 && pool.length <= 6);
+    const game = new PuppyGame(level.number, level.number * 97);
+    for (let turn = 0; turn < 5 && !game.snapshot().won && !game.snapshot().lost; turn++) {
+      assert(game.snapshot().board.flat().every(tile => tile && (tile.special === 'rainbow' ? tile.breed === -1 : pool.includes(tile.breed))));
+      const move = game.hint()!;
+      assert(game.swap(move.a, move.b).valid);
+    }
+    if (!game.snapshot().won && !game.snapshot().lost) assert(game.useBooster('shuffle').valid);
+    assert(game.snapshot().board.flat().every(tile => tile && (tile.special === 'rainbow' ? tile.breed === -1 : pool.includes(tile.breed))));
+  }
+});
+
+test('rainbow effects find the most common actual breed ID in a rotated pool', () => {
+  const level = LEVELS.find(level => level.breedPool?.includes(11))!;
+  assert(level, 'the final new puppy appears in a real level');
+  const game = new PuppyGame(level.number, 11);
+  const alphabet = [11, ...level.breedPool!.filter(breed => breed !== 11)];
+  const state = game as any;
+  state.board = Array.from({ length: 8 }, (_, r) => Array.from({ length: 8 }, (_, c) => ({ id: r * 8 + c + 1, breed: alphabet[(r * 2 + c) % alphabet.length], special: null })));
+  state.objectives = [{ kind: 'score', target: 1e9, current: 0 }];
+  // Add separated Collies without creating pre-existing matches.
+  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+    const tile = state.board[r][c]; const before = tile.breed; tile.breed = 11;
+    if (analyzeMatches(state.board).length) tile.breed = before;
+  }
+  state.board[0][0].breed = -1; state.board[0][0].special = 'rainbow';
+  const collies = state.board.flatMap((row: any[], r: number) => row.flatMap((tile, c) => tile.breed === 11 ? [{ r, c }] : []));
+  assert(collies.length > 20, 'Collies are the clear majority');
+  const removed = firstClear(game.useBooster('rainbow', { r: 0, c: 0 })).cleared;
+  assert(collies.every((wanted: Coord) => removed.some(cell => cell.r === wanted.r && cell.c === wanted.c)));
+});
+
+test('opening bonuses apply once and old rules never receive them', () => {
+  const lucky = LEVELS.find(level => level.bonusMoves)!;
+  const game = new PuppyGame(lucky.number, 321);
+  assert.equal(game.snapshot().moves, lucky.moves + lucky.bonusMoves!);
+  const move = game.hint()!;
+  game.swap(move.a, move.b);
+  const replayed = new PuppyGame(lucky.number, 321);
+  replayed.swap(move.a, move.b);
+  assert.deepEqual(replayed.snapshot(), game.snapshot(), 'reloading a saved action does not add moves again');
+  const moves = game.snapshot().moves;
+  if (!game.snapshot().won) { game.useBooster('shuffle'); assert.equal(game.snapshot().moves, moves); }
+
+  const welcome = LEVELS.find(level => level.startingSpecial)!;
+  const opening = new PuppyGame(welcome.number, 789);
+  assert.equal(opening.snapshot().board[3][3]!.special, welcome.startingSpecial);
+  assert.equal(opening.snapshot().board.flat().filter(tile => tile!.special).length, 1);
+  assert.deepEqual(opening.snapshot(), new PuppyGame(welcome.number, 789).snapshot());
+  assert.equal(new PuppyGame(welcome.number, 789, 1).snapshot().board.flat().filter(tile => tile!.special).length, 0);
+});
+
+test('special goals count newly made specials and not the use of an existing stripe', () => {
+  const game = emptyFixture();
+  (game as any).objectives = [{ kind: 'special', target: 1, current: 0 }];
+  [0, 0, 1, 0, 2, 3, 4, 5].forEach((breed, c) => setBreed(game, 3, c, breed));
+  setBreed(game, 2, 2, 0);
+  const created = game.swap({ r: 2, c: 2 }, { r: 3, c: 2 });
+  assert.equal(firstClear(created).snapshot.objectives[0].current, 1);
+  assert.equal(game.snapshot().won, true, 'the new goal participates in win detection');
+
+  const existing = emptyFixture();
+  (existing as any).objectives = [{ kind: 'special', target: 99, current: 0 }];
+  (existing as any).board[7][7].special = 'row';
+  assert.equal(firstClear(existing.useBooster('paw', { r: 7, c: 7 })).snapshot.objectives[0].current, 0);
+});
+
+test('cascade goals count extra clear stages across turns, without shuffle or invalid-move progress', () => {
+  let game: PuppyGame | undefined;
+  let first: TurnResult | undefined;
+  for (let seed = 0; seed < 100; seed++) {
+    const candidate = new PuppyGame(56, seed);
+    (candidate as any).objectives = [{ kind: 'cascade', target: 999, current: 0 }];
+    const move = candidate.hint()!;
+    const result = candidate.swap(move.a, move.b);
+    if (result.combos > 1) { game = candidate; first = result; break; }
+  }
+  assert(game && first, 'a deterministic ordinary swap produces a real cascade');
+  assert.equal(firstClear(first).snapshot.objectives[0].current, 0, 'the player-created first clear is not a cascade');
+  assert.equal(game.snapshot().objectives[0].current, first.combos - 1);
+  const before = game.snapshot().objectives[0].current;
+  game.useBooster('shuffle');
+  assert.equal(game.snapshot().objectives[0].current, before);
+  assert.equal(game.swap({ r: -1, c: 0 }, { r: 0, c: 0 }).valid, false);
+  assert.equal(game.snapshot().objectives[0].current, before);
+  const move = game.hint()!;
+  const second = game.swap(move.a, move.b);
+  assert.equal(game.snapshot().objectives[0].current, before + Math.max(0, second.combos - 1));
 });
 
 test('seeded play is deterministic and snapshots cannot mutate game state', () => {

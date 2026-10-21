@@ -11,7 +11,7 @@ const BASE = process.env.PUPPY_BASE_URL || 'http://127.0.0.1:8080';
 const KEY = 'puppy-pals-save-v1';
 await mkdir('.test-build', { recursive: true });
 await build({ entryPoints: ['src/puppy/engine.ts'], outfile: '.test-build/loading-engine.cjs', bundle: true, platform: 'node', target: 'node20', format: 'cjs' });
-const { PuppyGame } = require('../.test-build/loading-engine.cjs');
+const { PuppyGame, BREEDS } = require('../.test-build/loading-engine.cjs');
 const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || (existsSync('/usr/bin/chromium') ? '/usr/bin/chromium' : undefined);
 const browser = await chromium.launch({ headless: true, executablePath, args: ['--no-sandbox'] });
 const errors = [];
@@ -81,17 +81,17 @@ try {
     let releaseSprites;
     const spritesAllowed = new Promise(resolve => { releaseSprites = resolve; });
     let allRequested;
-    const sixSpritesRequested = new Promise(resolve => { allRequested = resolve; });
+    const allSpritesRequested = new Promise(resolve => { allRequested = resolve; });
     const requests = new Set();
     await page.route('**/puppy-pals/art/dog-*.svg', async route => {
       requests.add(new URL(route.request().url()).pathname);
-      if (requests.size === 6) allRequested();
+      if (requests.size === BREEDS.length) allRequested();
       await spritesAllowed;
       await route.continue();
     });
     await page.goto(BASE, { waitUntil: 'domcontentloaded' });
     await page.waitForSelector('.board-wrap[data-loading="true"]');
-    await Promise.race([sixSpritesRequested, new Promise((_, reject) => setTimeout(() => reject(new Error('All six dog sprites must be requested before revealing the board')), 10000))]);
+    await Promise.race([allSpritesRequested, new Promise((_, reject) => setTimeout(() => reject(new Error('All campaign dog sprites must be requested before revealing the board')), 10000))]);
     assert.equal(await page.locator('#board').getAttribute('aria-busy'), 'true', 'cold board reports loading');
     assert.equal(await page.locator('#board').evaluate(board => getComputedStyle(board).visibility), 'hidden', 'do not reveal partially decoded artwork');
     assert(await page.locator('.board-loading').isVisible(), 'show the small loading overlay while preparing the full board');
@@ -127,7 +127,7 @@ try {
     for (let r = 0; r < 8 && !invalid; r++) for (let c = 0; c < 8 && !invalid; c++) {
       for (const b of [{ r, c: c + 1 }, { r: r + 1, c }]) {
         if (b.r > 7 || b.c > 7) continue;
-        const candidate = new PuppyGame(1, state.run.seed);
+        const candidate = new PuppyGame(1, state.run.seed, state.run.ruleset ?? 1);
         if (!candidate.swap({ r, c }, b).valid) { invalid = { a: { r, c }, b }; break; }
       }
     }
@@ -143,7 +143,7 @@ try {
     await page.locator('[data-action="hint"]').click();
     const points = await page.locator('.tile.hint').evaluateAll(tiles => tiles.map(tile => ({ r: Number(tile.dataset.r), c: Number(tile.dataset.c) })));
     assert.equal(points.length, 2);
-    const simulation = new PuppyGame(1, state.run.seed);
+    const simulation = new PuppyGame(1, state.run.seed, state.run.ruleset ?? 1);
     const expected = simulation.swap(points[0], points[1]);
     assert(expected.valid && !simulation.snapshot().won, 'fixture exercises ordinary refills without a result dialog');
     assert(expected.frames.every(frame => frame.snapshot.board.flat().filter(Boolean).length > 0), 'fixture never intentionally clears the full board');

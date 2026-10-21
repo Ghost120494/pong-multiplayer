@@ -1,4 +1,4 @@
-import { BREEDS, LEVELS, getLevel, type LevelConfig } from './levels';
+import { BREEDS, LEVELS, getLevel, type CampaignRules, type LevelConfig } from './levels';
 
 export { BREEDS, LEVELS } from './levels';
 export const BOARD_SIZE = 8;
@@ -7,7 +7,7 @@ export type Coord = { r: number; c: number };
 export type Special = null | 'row' | 'column' | 'bomb' | 'rainbow';
 export type Tile = { id: number; breed: number; special: Special };
 export type Board = (Tile | null)[][];
-export type Objective = { kind: 'collect' | 'grass' | 'score'; breed?: number; target: number; current: number };
+export type Objective = { kind: 'collect' | 'grass' | 'score' | 'special' | 'cascade'; breed?: number; target: number; current: number };
 export type Snapshot = {
   board: Board;
   grass: number[][];
@@ -108,6 +108,7 @@ export function findLegalMove(board: Board): { a: Coord; b: Coord } | null {
 /** Pure game rules with a private seeded random stream, separate from DOM/UI. */
 export class PuppyGame {
   readonly level: LevelConfig;
+  private readonly breedPool: readonly number[];
   private board: Board;
   private grass: number[][];
   private moves: number;
@@ -118,10 +119,11 @@ export class PuppyGame {
   private randomState: number;
   private nextTileId = 1;
 
-  constructor(levelNumber: number, seed?: number) {
-    this.level = getLevel(levelNumber);
+  constructor(levelNumber: number, seed?: number, readonly ruleset: CampaignRules = 2) {
+    this.level = getLevel(levelNumber, ruleset);
+    this.breedPool = this.level.breedPool ?? Array.from({ length: this.level.breeds }, (_, i) => i);
     this.randomState = (Number.isFinite(seed) ? seed! : Math.floor(Math.random() * 0x100000000)) >>> 0;
-    this.moves = this.level.moves;
+    this.moves = this.level.moves + (this.level.bonusMoves ?? 0);
     this.objectives = this.level.objectives.map(objective => ({ ...objective, current: 0 }));
     this.board = this.newPlayableBoard();
     this.grass = Array.from({ length: BOARD_SIZE }, () => Array<number>(BOARD_SIZE).fill(0));
@@ -130,6 +132,7 @@ export class PuppyGame {
       const { r, c } = coordinate(index);
       this.grass[r][c] = this.level.grassLayers;
     }
+    if (this.level.startingSpecial) this.board[3][3]!.special = this.level.startingSpecial;
   }
 
   snapshot(): Snapshot {
@@ -226,7 +229,7 @@ export class PuppyGame {
     return items;
   }
 
-  private tile(breed = Math.floor(this.random() * this.level.breeds), special: Special = null): Tile {
+  private tile(breed = this.breedPool[Math.floor(this.random() * this.breedPool.length)], special: Special = null): Tile {
     return { id: this.nextTileId++, breed, special };
   }
 
@@ -237,7 +240,7 @@ export class PuppyGame {
         const excluded = new Set<number>();
         if (c >= 2 && board[r][c - 1]!.breed === board[r][c - 2]!.breed) excluded.add(board[r][c - 1]!.breed);
         if (r >= 2 && board[r - 1][c]!.breed === board[r - 2][c]!.breed) excluded.add(board[r - 1][c]!.breed);
-        const breeds = Array.from({ length: this.level.breeds }, (_, i) => i).filter(breed => !excluded.has(breed));
+        const breeds = this.breedPool.filter(breed => !excluded.has(breed));
         board[r].push(this.tile(breeds[Math.floor(this.random() * breeds.length)]));
       }
       if (findLegalMove(board)) return board;
@@ -256,9 +259,17 @@ export class PuppyGame {
   }
 
   private mostCommonBreed(): number {
-    const counts = Array<number>(this.level.breeds).fill(0);
-    for (const row of this.board) for (const tile of row) if (tile && tile.breed >= 0) counts[tile.breed]++;
-    return counts.indexOf(Math.max(...counts));
+    if (this.ruleset === 1) {
+      // Keep the original tie-breaking and random replay behavior for old runs.
+      const counts = Array<number>(this.level.breeds).fill(0);
+      for (const row of this.board) for (const tile of row) if (tile && tile.breed >= 0) counts[tile.breed]++;
+      return counts.indexOf(Math.max(...counts));
+    }
+    const counts = new Map(this.breedPool.map(breed => [breed, 0]));
+    for (const row of this.board) for (const tile of row) if (tile && tile.breed >= 0) counts.set(tile.breed, (counts.get(tile.breed) ?? 0) + 1);
+    let mostCommon = this.breedPool[0];
+    for (const [breed, count] of counts) if (count > (counts.get(mostCommon) ?? 0)) mostCommon = breed;
+    return mostCommon;
   }
 
   private expandEffects(initial: Set<number>): Set<number> {
@@ -299,6 +310,10 @@ export class PuppyGame {
       });
       const cleared = this.expandEffects(matched);
       combos++;
+      for (const objective of this.objectives) {
+        if (objective.kind === 'special') objective.current = Math.min(objective.target, objective.current + spawns.length);
+        if (objective.kind === 'cascade' && combos > 1) objective.current = Math.min(objective.target, objective.current + 1);
+      }
       for (const index of cleared) {
         const cell = coordinate(index);
         const tile = this.board[cell.r][cell.c];

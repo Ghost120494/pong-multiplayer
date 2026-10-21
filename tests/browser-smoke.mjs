@@ -11,7 +11,7 @@ const BASE = process.env.PUPPY_BASE_URL || 'http://127.0.0.1:4173';
 const KEY = 'puppy-pals-save-v1';
 await mkdir('.test-build', { recursive: true });
 await build({ entryPoints: ['src/puppy/engine.ts'], outfile: '.test-build/browser-engine.cjs', bundle: true, platform: 'node', target: 'node20', format: 'cjs' });
-const { PuppyGame } = require('../.test-build/browser-engine.cjs');
+const { PuppyGame, LEVELS } = require('../.test-build/browser-engine.cjs');
 const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || (existsSync('/usr/bin/chromium') ? '/usr/bin/chromium' : undefined);
 const browser = await chromium.launch({ headless: true, executablePath, args: ['--no-sandbox'] });
 const failures = [];
@@ -75,7 +75,7 @@ async function hintedMove(page) {
   return { a: points[0], b: points[1] };
 }
 function replay(run) {
-  const game = new PuppyGame(run.level, run.seed);
+  const game = new PuppyGame(run.level, run.seed, run.ruleset ?? 1);
   for (const action of run.actions) {
     const result = action.kind === 'swap' ? game.swap(action.a, action.b) : game.useBooster(action.kind, action.target);
     assert(result.valid);
@@ -133,24 +133,8 @@ try {
   await page.locator('[data-action="daily"]').click();
   const afterDaily = await saved(page);
   assert.equal(afterDaily.coins, beforeDaily.coins + 50);
-  assert.equal(afterDaily.boosters.shuffle, beforeDaily.boosters.shuffle + 1);
+  assert.equal(afterDaily.boosters.shuffle, beforeDaily.boosters.shuffle, 'daily reward cannot introduce a locked Shuffle booster');
   assert(await page.locator('[data-action="daily"]').isDisabled(), 'daily reward cannot be repeatedly claimed');
-  await page.locator('.nav-links [data-action="shop"]').click();
-  assert.equal(await page.locator('.purchase-price').innerText(), '$0.99');
-  assert.equal(await page.locator('.purchase-detail strong').innerText(), '5 extra attempts');
-  assert(await page.locator('[data-action="purchase"]').isDisabled(), 'unconfigured PayPal cannot create pretend purchases');
-  await page.locator('[data-action="buy-booster"][data-booster="paw"]').click();
-  assert.equal((await saved(page)).coins, afterDaily.coins - 40);
-  assert.equal((await saved(page)).boosters.paw, afterDaily.boosters.paw + 1);
-  await closeModal(page);
-  const beforePaw = Number(await page.locator('#moves').innerText());
-  const paws = (await saved(page)).boosters.paw;
-  await page.locator('.booster[data-booster="paw"]').click();
-  await cell(page, { r: 0, c: 0 }).click();
-  await page.waitForFunction(key => JSON.parse(localStorage.getItem(key)).run.actions.at(-1)?.kind === 'paw', KEY);
-  await idle(page);
-  assert.equal(Number(await page.locator('#moves').innerText()), beforePaw, 'booster spends no move');
-  assert.equal((await saved(page)).boosters.paw, paws - 1);
 
   // Complete the real level using only ordinary UI moves, never mutating game state.
   let played = 0;
@@ -169,14 +153,44 @@ try {
   assert.equal((await saved(page)).unlocked, 2, 'earned progression survives reload');
   assert.match(await page.locator('#level-label').innerText(), /LEVEL 2/);
 
+  // Paw pop is introduced after the first real win; future boosts stay hidden.
+  assert(await page.locator('.booster[data-booster="paw"]').isVisible());
+  assert(!(await page.locator('.booster[data-booster="shuffle"]').isVisible()));
+  assert(!(await page.locator('.booster[data-booster="rainbow"]').isVisible()));
+  const beforeShop = await saved(page);
+  await page.locator('.nav-links [data-action="shop"]').click();
+  assert.equal(await page.locator('.purchase-price').innerText(), '$0.99');
+  assert.equal(await page.locator('.purchase-detail strong').innerText(), '5 extra attempts');
+  assert(await page.locator('[data-action="purchase"]').isDisabled(), 'unconfigured PayPal cannot create pretend purchases');
+  assert(!(await page.locator('[data-action="buy-booster"][data-booster="shuffle"]').isVisible()), 'the shop respects staged booster unlocks');
+  await page.locator('[data-action="buy-booster"][data-booster="paw"]').click();
+  assert.equal((await saved(page)).coins, beforeShop.coins - 40);
+  assert.equal((await saved(page)).boosters.paw, beforeShop.boosters.paw + 1);
+  await closeModal(page);
+  const beforePaw = Number(await page.locator('#moves').innerText());
+  const paws = (await saved(page)).boosters.paw;
+  await page.locator('.booster[data-booster="paw"]').click();
+  await cell(page, { r: 0, c: 0 }).click();
+  await page.waitForFunction(key => JSON.parse(localStorage.getItem(key)).run.actions.at(-1)?.kind === 'paw', KEY);
+  await idle(page);
+  assert.equal(Number(await page.locator('#moves').innerText()), beforePaw, 'booster spends no move');
+  assert.equal((await saved(page)).boosters.paw, paws - 1);
+
   await page.locator('.top-actions [data-action="help"]').click();
   assert.match(await page.locator('.modal').innerText(), /Match 4/);
   await closeModal(page);
   await page.locator('.nav-links [data-action="map"]').click();
-  for (let i = 1; i < 10; i++) await page.locator('#modal-map [data-action="chapter-next"]').click();
-  assert.match(await page.locator('#modal-map').innerText(), /Chapter 10 of 10/);
-  assert(await page.locator('#modal-map [data-level="100"]').isDisabled(), 'level100 exists and respects progression lock');
+  const chapters = Math.ceil(LEVELS.length / 10);
+  for (let i = 1; i < chapters; i++) await page.locator('#modal-map [data-action="chapter-next"]').click();
+  assert.match(await page.locator('#modal-map').innerText(), new RegExp(`Chapter ${chapters} of ${chapters}`));
+  assert(await page.locator(`#modal-map [data-level="${LEVELS.length}"]`).isDisabled(), 'the expanded final level exists and respects progression lock');
   await closeModal(page);
+
+  // Start an untouched board before testing the separate free offline wallet.
+  await page.locator('[data-action="restart"]:visible').first().click();
+  await page.locator('[data-action="confirm-level"]').click();
+  await idle(page);
+  assert.equal((await saved(page)).run.attemptId, null);
 
   await page.evaluate(async () => { await navigator.serviceWorker.ready; });
   await page.reload(); await ready(page);
@@ -193,7 +207,7 @@ try {
   await context.setOffline(false); intentionallyOffline = false;
   const balanceAfterOffline = await page.evaluate(async () => (await fetch('/api/puppy/state')).json());
   assert.equal(balanceAfterOffline.paidAttempts, balanceBeforeOffline.paidAttempts, 'offline play never fabricates paid credits');
-  console.log(`Desktop/PWA OK: sprite loading, click/swipe, save replay, daily reward, coin boosters, real level win in ${played + 2} swaps, locked level100, disabled PayPal, offline refresh/play`);
+  console.log(`Desktop/PWA OK: sprite loading, click/swipe, save replay, daily reward, staged coin boosters, real level win in ${played + 2} swaps, locked level${LEVELS.length}, disabled PayPal, offline refresh/play`);
   await context.close();
 
   const mobileContext = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 1, reducedMotion: 'reduce' });

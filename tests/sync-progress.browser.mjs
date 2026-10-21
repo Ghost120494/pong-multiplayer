@@ -60,7 +60,7 @@ async function playMove(page, move) {
   await idle(page);
 }
 function replay(run) {
-  const game = new PuppyGame(run.level, run.seed);
+  const game = new PuppyGame(run.level, run.seed, run.ruleset ?? 1);
   for (const action of run.actions) {
     const result = action.kind === 'swap' ? game.swap(action.a, action.b) : game.useBooster(action.kind, action.target);
     assert(result.valid, 'saved history consists of real valid moves');

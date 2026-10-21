@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none" role="img" aria-label="Shiba Inu">
+<title>Shiba Inu</title>
+<defs>
+<linearGradient id="fur" x1="35" y1="19" x2="64" y2="88" gradientUnits="userSpaceOnUse"><stop stop-color="#efad69"/><stop offset="1" stop-color="#c8793f"/></linearGradient>
+<linearGradient id="cream" x1="50" y1="41" x2="50" y2="89" gradientUnits="userSpaceOnUse"><stop stop-color="#fffdf6"/><stop offset="1" stop-color="#f7e8d5"/></linearGradient>
+<filter id="shadow" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy="3" stdDeviation="2" flood-color="#48352b" flood-opacity=".16"/></filter>
+</defs>
+<g filter="url(#shadow)">
+<path d="M20 42 24 15Q25 10 30 15L44 33M80 42 76 15Q75 10 70 15L56 33" fill="url(#fur)" stroke="#bd753e" stroke-width="1.3" stroke-linejoin="round"/>
+<path d="m28 32 1-10 8 12M72 32l-1-10-8 12" fill="#edb0a0"/>
+<path d="M14 49Q16 28 39 27Q50 23 61 27Q84 28 86 49L90 64 83 64Q80 84 50 90Q20 84 17 64L10 64Z" fill="url(#fur)"/>
+<path d="M17 57Q29 68 39 58Q50 48 61 58Q71 68 83 57L79 72Q69 87 50 88Q31 87 21 72Z" fill="url(#cream)"/>
+<ellipse cx="34" cy="40" rx="5" ry="2.7" fill="#fff0d1"/><ellipse cx="66" cy="40" rx="5" ry="2.7" fill="#fff0d1"/>
+<ellipse cx="25" cy="65" rx="5" ry="3" fill="#eba591" fill-opacity=".6"/><ellipse cx="75" cy="65" rx="5" ry="3" fill="#eba591" fill-opacity=".6"/>
+<ellipse cx="34" cy="52" rx="5.3" ry="6" fill="#382d35"/><ellipse cx="66" cy="52" rx="5.3" ry="6" fill="#382d35"/><circle cx="32.5" cy="50" r="1.7" fill="white"/><circle cx="64.5" cy="50" r="1.7" fill="white"/><circle cx="35.9" cy="54.3" r=".8" fill="white" fill-opacity=".7"/><circle cx="67.9" cy="54.3" r=".8" fill="white" fill-opacity=".7"/>
+<path d="M45 64Q50 61 55 64Q55 68 50 70Q45 68 45 64Z" fill="#3b2c31"/><ellipse cx="48.8" cy="64" rx="1.6" ry=".7" fill="white" fill-opacity=".3"/>
+<path d="M50 69V73M50 72Q45 78 41 73M50 72Q55 78 59 73" stroke="#3b2c31" stroke-width="1.8" stroke-linecap="round"/><path d="M46 77Q50 81 54 77V80Q50 86 46 80Z" fill="#ed93a1"/>
+</g></svg>

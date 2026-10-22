@@ -34,11 +34,11 @@ function validateSettled(snapshot: Snapshot): void {
   assert.equal(analyzeMatches(snapshot.board).length, 0, 'all cascades settle');
 }
 
-test('campaign defines 180 distinct levels and keeps the original 100 definitions available', () => {
-  assert.equal(LEVELS.length, 180);
-  assert.equal(BREEDS.length, 12);
-  assert.equal(new Set(LEVELS.map(level => level.name)).size, 180);
-  assert.equal(new Set(LEVELS.map(level => level.chapter)).size, 18);
+test('campaign defines 500 distinct levels and keeps the original 100 definitions available', () => {
+  assert.equal(LEVELS.length, 500);
+  assert.equal(BREEDS.length, 16);
+  assert.equal(new Set(LEVELS.map(level => level.name)).size, 500);
+  assert.equal(new Set(LEVELS.map(level => level.chapter)).size, 50);
   assert.equal(LEGACY_LEVELS.length, 100);
   assert.equal(LEGACY_LEVELS[0].moves, 24);
   assert.deepEqual(LEGACY_LEVELS[0].objectives, [{ kind: 'collect', breed: 0, target: 12 }, { kind: 'score', target: 900 }]);
@@ -49,11 +49,11 @@ test('campaign defines 180 distinct levels and keeps the original 100 definition
     const grass = level.objectives.find(goal => goal.kind === 'grass');
     assert.equal(grass?.target ?? 0, level.grassCount * level.grassLayers);
   }
-  for (const invalid of [0, 181, 1.5, NaN]) assert.throws(() => getLevel(invalid), RangeError);
+  for (const invalid of [0, 501, 1.5, NaN]) assert.throws(() => getLevel(invalid), RangeError);
   assert.throws(() => getLevel(101, 1), RangeError);
 });
 
-test('all 180 levels open without matches and permit a real scoring move', () => {
+test('all 500 levels open without matches and permit a real scoring move', () => {
   for (const level of LEVELS) {
     const game = new PuppyGame(level.number, level.number * 7919);
     const before = game.snapshot();
@@ -87,7 +87,7 @@ test('every campaign level can play all the way to a win or exhausted attempts w
     assert.notEqual(game.snapshot().won, game.snapshot().lost);
     totalTurns += turns;
   }
-  assert(totalTurns > 1000, 'the campaign exercises substantial real play, not zero-turn checks');
+  assert(totalTurns > 5000, 'the campaign exercises substantial real play, not zero-turn checks');
 });
 
 test('legacy saves replay their original boards, moves and booster histories exactly', () => {
@@ -116,39 +116,66 @@ test('legacy saves replay their original boards, moves and booster histories exa
   }
 });
 
+test('the shipped 180-level campaign retains its ruleset-2 boards and booster histories', () => {
+  // Captured from git HEAD's shipped 180-level engine before this expansion.
+  const shipped = [
+    [37, '616f4876b5955d488a9f531a796548117827b2a20cd1dd76f655c47e1607f839'],
+    [146, '91915fd34b608ee1544a5981ecbafeb2e7825354890fe953079afbd75f745fe9'],
+    [180, '254387782ec8e61df642651152ddc113a832dd9e3987c5dbeb406396c27301e2'],
+  ] as const;
+  for (const [level, expected] of shipped) {
+    const game = new PuppyGame(level, level * 7919, 2);
+    const snapshots = [game.snapshot()];
+    for (let i = 0; i < 8 && !game.snapshot().won && !game.snapshot().lost; i++) {
+      let result: TurnResult;
+      if (i === 1) result = game.useBooster('paw', { r: 0, c: 0 });
+      else if (i === 3) result = game.useBooster('shuffle');
+      else if (i === 5) result = game.useBooster('rainbow', { r: 4, c: 4 });
+      else { const move = game.hint()!; result = game.swap(move.a, move.b); }
+      assert(result.valid);
+      snapshots.push(game.snapshot());
+    }
+    assert.equal(createHash('sha256').update(JSON.stringify(snapshots)).digest('hex'), expected, `level ${level}'s current saved run stays unchanged`);
+  }
+});
+
 test('rotating puppy pools stay bounded through refills, specials and shuffle', () => {
+  const observed = new Set<number>();
   for (const level of LEVELS.filter(level => level.breedPool?.some(breed => breed >= 6))) {
     const pool = level.breedPool!;
     assert(pool.length >= 5 && pool.length <= 6);
     const game = new PuppyGame(level.number, level.number * 97);
     for (let turn = 0; turn < 5 && !game.snapshot().won && !game.snapshot().lost; turn++) {
       assert(game.snapshot().board.flat().every(tile => tile && (tile.special === 'rainbow' ? tile.breed === -1 : pool.includes(tile.breed))));
+      game.snapshot().board.flat().forEach(tile => { if (tile && tile.breed >= 0) observed.add(tile.breed); });
       const move = game.hint()!;
       assert(game.swap(move.a, move.b).valid);
     }
     if (!game.snapshot().won && !game.snapshot().lost) assert(game.useBooster('shuffle').valid);
     assert(game.snapshot().board.flat().every(tile => tile && (tile.special === 'rainbow' ? tile.breed === -1 : pool.includes(tile.breed))));
   }
+  for (const breed of [12, 13, 14, 15]) assert(observed.has(breed), `new puppy ${breed} participates in ordinary play`);
 });
 
 test('rainbow effects find the most common actual breed ID in a rotated pool', () => {
-  const level = LEVELS.find(level => level.breedPool?.includes(11))!;
+  const breed = BREEDS.length - 1;
+  const level = LEVELS.find(level => level.breedPool?.includes(breed))!;
   assert(level, 'the final new puppy appears in a real level');
   const game = new PuppyGame(level.number, 11);
-  const alphabet = [11, ...level.breedPool!.filter(breed => breed !== 11)];
+  const alphabet = [breed, ...level.breedPool!.filter(candidate => candidate !== breed)];
   const state = game as any;
   state.board = Array.from({ length: 8 }, (_, r) => Array.from({ length: 8 }, (_, c) => ({ id: r * 8 + c + 1, breed: alphabet[(r * 2 + c) % alphabet.length], special: null })));
   state.objectives = [{ kind: 'score', target: 1e9, current: 0 }];
-  // Add separated Collies without creating pre-existing matches.
+  // Add separated instances of the final puppy without pre-existing matches.
   for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
-    const tile = state.board[r][c]; const before = tile.breed; tile.breed = 11;
+    const tile = state.board[r][c]; const before = tile.breed; tile.breed = breed;
     if (analyzeMatches(state.board).length) tile.breed = before;
   }
   state.board[0][0].breed = -1; state.board[0][0].special = 'rainbow';
-  const collies = state.board.flatMap((row: any[], r: number) => row.flatMap((tile, c) => tile.breed === 11 ? [{ r, c }] : []));
-  assert(collies.length > 20, 'Collies are the clear majority');
+  const wanted = state.board.flatMap((row: any[], r: number) => row.flatMap((tile, c) => tile.breed === breed ? [{ r, c }] : []));
+  assert(wanted.length > 20, 'the final puppy is the clear majority');
   const removed = firstClear(game.useBooster('rainbow', { r: 0, c: 0 })).cleared;
-  assert(collies.every((wanted: Coord) => removed.some(cell => cell.r === wanted.r && cell.c === wanted.c)));
+  assert(wanted.every((point: Coord) => removed.some(cell => cell.r === point.r && cell.c === point.c)));
 });
 
 test('opening bonuses apply once and old rules never receive them', () => {

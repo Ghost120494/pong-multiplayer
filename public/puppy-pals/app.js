@@ -4,7 +4,35 @@ var __publicField = (obj, key2, value) => __defNormalProp(obj, typeof key2 !== "
 
 // src/puppy/progression.ts
 var BOOSTER_UNLOCKS = Object.freeze({ paw: 2, shuffle: 14, rainbow: 38 });
-var BREED_UNLOCKS = Object.freeze([1, 1, 1, 1, 1, 14, 26, 50, 74, 98, 122, 146]);
+var BREED_UNLOCKS = Object.freeze([1, 1, 1, 1, 1, 14, 26, 50, 74, 98, 122, 146, 194, 266, 338, 410]);
+var NEW_PUPPY_WELCOMES = Object.freeze({
+  194: { id: "german-shepherd", breed: 12, title: "Meet the German Shepherd", description: "A bright-eyed shepherd joins the orchard trail. Meet your new pal in a gentle welcome with your earned picnic perks." },
+  266: { id: "schnauzer", breed: 13, title: "Meet the Schnauzer", description: "Meet a cheerful little pup with silver eyebrows and a wonderful whiskery smile. Enjoy an easy welcome together." },
+  338: { id: "cocker-spaniel", breed: 14, title: "Meet the Cocker Spaniel", description: "A soft-eared new friend is ready for a picnic. Match those honey-colored ears and enjoy your familiar picnic bonuses." },
+  410: { id: "bernese", breed: 15, title: "Meet the Bernese", description: "A gentle mountain pup with warm brown cheeks joins your pack. Celebrate with a welcoming picnic and familiar matches." }
+});
+var LATER_CHALLENGES = [
+  { challenge: "grass", title: "A garden worth sharing", description: "Revisit the garden: match over grass squares to clear their layers, then reach the score goal." },
+  { challenge: "dual", title: "Two pals, one happy trail", description: "Bring two familiar puppy breeds together. Watch both collection goals as you make your matches." },
+  { challenge: "special", title: "A few special little matches", description: "Create specials with matches of four, five, or an L or T shape. Newly made specials count toward the goal." },
+  { challenge: "cascade", title: "Let the good matches tumble", description: "Set off extra matches as the puppies fall. Every clearing stage after the first in a chain adds to your cascade goal." },
+  { challenge: "mixed", title: "A little of everything you know", description: "Bring one favorite breed together, clear a small garden, and reach the score goal using your familiar skills." }
+];
+var LATER_PICNICS = ["A shady little picnic", "A sunny welcome break", "A trail full of treats", "A picnic with old friends", "A cozy pause for the pack", "A happy little reunion"];
+var LATER_DISCOVERIES = Array.from({ length: 54 }, (_, index) => {
+  const level = 182 + index * 6;
+  const puppy = NEW_PUPPY_WELCOMES[level];
+  if (puppy) return { ...puppy, level, kind: "puppy" };
+  if (index % 2 === 0) return {
+    id: `picnic-${level}`,
+    level,
+    kind: "bonus",
+    title: LATER_PICNICS[Math.floor(index / 2) % LATER_PICNICS.length],
+    description: "Enjoy a gentler picnic with two extra opening moves, a striped puppy, and 25 extra coins for your first win. All the little helps you already know."
+  };
+  const challenge = LATER_CHALLENGES[Math.floor(index / 2) % LATER_CHALLENGES.length];
+  return { ...challenge, id: `trail-${challenge.challenge}-${level}`, level, kind: "challenge" };
+});
 var DISCOVERIES = Object.freeze([
   { id: "paw-pop", level: 2, kind: "bonus", title: "A little helping paw", description: "Meet Paw pop! Try your two free pops to clear a puppy without spending a move.", booster: "paw", amount: 2 },
   { id: "first-grass", level: 8, kind: "challenge", title: "A little overgrown", description: "Match over green grass to clear it. Paw pop can reach a stubborn patch, too." },
@@ -38,7 +66,8 @@ var DISCOVERIES = Object.freeze([
   { id: "starflower-picnic", level: 158, kind: "bonus", title: "A starflower picnic", description: "Celebrate your full puppy pack in a gentle level with your earned picnic perks." },
   { id: "festival-makers", level: 164, kind: "challenge", title: "Festival of specials", description: "Put your match-making practice to work and create a few happy surprises." },
   { id: "homecoming-picnic", level: 170, kind: "bonus", title: "The homecoming picnic", description: "Gather your friends for one more gentle picnic before the final chapter." },
-  { id: "homeward-garden", level: 176, kind: "challenge", title: "The homeward garden", description: "A final garden challenge brings your collection and clearing skills together." }
+  { id: "homeward-garden", level: 176, kind: "challenge", title: "The homeward garden", description: "A final garden challenge brings your collection and clearing skills together." },
+  ...LATER_DISCOVERIES
 ].map((discovery) => Object.freeze(discovery)));
 function getUnlockedBreeds(level) {
   return BREED_UNLOCKS.flatMap((unlock, breed) => unlock <= level ? [breed] : []);
@@ -57,8 +86,8 @@ function firstWinBonus(level) {
 }
 
 // src/puppy/levels.ts
-var LEVEL_COUNT = 180;
-var CHAPTER_COUNT = 18;
+var LEVEL_COUNT = 500;
+var CHAPTER_COUNT = 50;
 var BREEDS = Object.freeze([
   Object.freeze({ id: 0, name: "Corgi", color: "#eea65d" }),
   Object.freeze({ id: 1, name: "Beagle", color: "#bd8264" }),
@@ -71,7 +100,11 @@ var BREEDS = Object.freeze([
   Object.freeze({ id: 8, name: "Shiba Inu", color: "#e79464" }),
   Object.freeze({ id: 9, name: "Dachshund", color: "#a77d63" }),
   Object.freeze({ id: 10, name: "Samoyed", color: "#bad5da" }),
-  Object.freeze({ id: 11, name: "Border Collie", color: "#90a69a" })
+  Object.freeze({ id: 11, name: "Border Collie", color: "#90a69a" }),
+  Object.freeze({ id: 12, name: "German Shepherd", color: "#bc9366" }),
+  Object.freeze({ id: 13, name: "Schnauzer", color: "#a1a6b4" }),
+  Object.freeze({ id: 14, name: "Cocker Spaniel", color: "#d4a278" }),
+  Object.freeze({ id: 15, name: "Bernese", color: "#9a8c86" })
 ]);
 var CHAPTERS = [
   {
@@ -167,7 +200,44 @@ var NEW_CHAPTERS = [
   { name: "Festival Fields", levels: ["Festival Welcome", "Ribbon-Race Rovers", "Confetti Corgis", "Festival of Specials", "Bunting Buddies", "Lantern-Light Pals", "Puppy Parade Practice", "Field of Friendly Faces", "The Treat-Stand Trail", "Homecoming Picnic"] },
   { name: "Homecoming Hollow", levels: ["Welcome to the Hollow", "Favorite Little Faces", "A Path of Pawprints", "The Friendship Bridge", "Homeward Howls", "The Homeward Garden", "One More Happy Match", "Every Puppy Together", "A Very Good Adventure", "Home Is Where the Pups Are"] }
 ];
-var CAMPAIGN_CHAPTERS = [...CHAPTERS, ...NEW_CHAPTERS];
+var FURTHER_CHAPTERS = [
+  ["Applewood Orchard", "Applewood"],
+  ["Shepherd Gardens", "Shepherd"],
+  ["Lavender Lane", "Lavender"],
+  ["Cinnamon Cove", "Cinnamon"],
+  ["Buttercup Bend", "Buttercup"],
+  ["Pebblebrook Path", "Pebblebrook"],
+  ["Honeybee Hollow", "Honeybee"],
+  ["Willow Whiskers", "Willow"],
+  ["Silver Birch Woods", "Silver Birch"],
+  ["Schnauzer Square", "Whisker"],
+  ["Dandelion Downs", "Dandelion"],
+  ["Bluebell Crossing", "Bluebell"],
+  ["Sunflower Station", "Sunflower"],
+  ["Seashell Shores", "Seashell"],
+  ["Juniper Junction", "Juniper"],
+  ["Rosehip Ramble", "Rosehip"],
+  ["Spaniel Springs", "Spaniel"],
+  ["Cloverleaf Corner", "Cloverleaf"],
+  ["Chestnut Courtyard", "Chestnut"],
+  ["Firefly Falls", "Firefly"],
+  ["Lemon Blossom Bay", "Lemon Blossom"],
+  ["Acorn Avenue", "Acorn"],
+  ["Heather Highlands", "Heather"],
+  ["Mountain Paw Meadow", "Mountain Paw"],
+  ["Bernese Brook", "Bernese"],
+  ["Pinecone Promenade", "Pinecone"],
+  ["Foxglove Fields", "Foxglove"],
+  ["Daisychain Dunes", "Daisychain"],
+  ["Starlight Steps", "Starlight"],
+  ["Amberleaf Arcade", "Amberleaf"],
+  ["Friendship Forest", "Friendship"],
+  ["Forever Pals Park", "Forever Pals"]
+].map(([name, theme]) => ({
+  name,
+  levels: ["Welcome", "Wander", "Wonders", "Buddies", "Garden", "Gathering", "Matchmakers", "Footprints", "Together", "Celebration"].map((suffix) => `${theme} ${suffix}`)
+}));
+var CAMPAIGN_CHAPTERS = [...CHAPTERS, ...NEW_CHAPTERS, ...FURTHER_CHAPTERS];
 var INTRO_NAMES = Object.freeze({
   2: "A Little Helping Paw",
   8: "The First Little Garden",
@@ -275,7 +345,67 @@ function makeLevel(number) {
     ...startingSpecial ? { startingSpecial } : {}
   });
 }
-var LEVELS = Object.freeze(Array.from({ length: LEVEL_COUNT }, (_, index) => makeLevel(index + 1)));
+function makeExtendedLevel(number) {
+  const chapterIndex = Math.floor((number - 1) / 10);
+  const extensionChapter = chapterIndex - 18;
+  const stage = (number - 1) % 10;
+  const chapter = CAMPAIGN_CHAPTERS[chapterIndex];
+  const breedPool = boardPalette(number);
+  const discovery = discoveryForLevel(number);
+  const picnic = isPicnicLevel(number);
+  const featuredBreed = discovery?.breed ?? breedPool[(extensionChapter + stage) % breedPool.length];
+  const secondBreed = breedPool[(breedPool.indexOf(featuredBreed) + 2) % breedPool.length];
+  const wave = extensionChapter % 4;
+  const scoreTarget = 1800 + wave * 200 + stage * 60;
+  const collectionTarget = 14 + wave * 2;
+  const dualTarget = 9 + wave;
+  const challenge = discovery?.challenge ?? ["mixed", "cascade", "special", "dual", "grass", "collection", "special", "mixed", "cascade", "garden-pals"][stage];
+  let grassCount = 0, grassLayers = 0;
+  let objectives;
+  let description;
+  if (picnic) {
+    objectives = [{ kind: "collect", breed: featuredBreed, target: 12 }, { kind: "score", target: 1600 + wave * 150 }];
+    description = discovery?.description ?? "A familiar picnic break: enjoy two extra opening moves, a striped puppy, and first-win treat coins.";
+  } else if (challenge === "special") {
+    objectives = [{ kind: "special", target: wave === 3 ? 3 : 2 }, { kind: "collect", breed: featuredBreed, target: collectionTarget }];
+    description = "Create specials with matches of four, five, or an L or T shape, and bring a favorite breed together.";
+  } else if (challenge === "cascade") {
+    objectives = [{ kind: "cascade", target: wave >= 2 ? 3 : 2 }, { kind: "score", target: scoreTarget }];
+    description = "Let falling puppies make extra matches. Each clearing stage after the first in a chain counts toward your cascade goal.";
+  } else if (challenge === "dual") {
+    objectives = [{ kind: "collect", breed: featuredBreed, target: dualTarget }, { kind: "collect", breed: secondBreed, target: dualTarget }, { kind: "score", target: scoreTarget }];
+    description = `Bring ${BREEDS[featuredBreed].name} and ${BREEDS[secondBreed].name} pals together, then reach the score goal.`;
+  } else if (challenge === "grass") {
+    grassCount = 12 + wave * 2;
+    grassLayers = extensionChapter % 3 === 0 ? 1 : 2;
+    objectives = [{ kind: "grass", target: grassCount * grassLayers }, { kind: "score", target: scoreTarget }];
+    description = `Match over the garden to clear ${grassLayers === 2 ? "both layers of" : "the"} grass and reach the score goal.`;
+  } else if (challenge === "mixed" || challenge === "garden-pals") {
+    grassCount = challenge === "garden-pals" ? 12 : 10 + wave * 2;
+    grassLayers = extensionChapter % 3 === 0 ? 1 : 2;
+    objectives = challenge === "garden-pals" ? [{ kind: "collect", breed: featuredBreed, target: dualTarget }, { kind: "collect", breed: secondBreed, target: dualTarget }, { kind: "grass", target: grassCount * grassLayers }] : [{ kind: "collect", breed: featuredBreed, target: collectionTarget }, { kind: "grass", target: grassCount * grassLayers }, { kind: "score", target: scoreTarget }];
+    description = challenge === "garden-pals" ? "Bring two breeds together while clearing a small garden. Every goal uses a skill your pack already knows." : "Bring a favorite breed together, clear a small garden, and reach the score goal using your familiar skills.";
+  } else {
+    objectives = [{ kind: "collect", breed: featuredBreed, target: collectionTarget }, { kind: "score", target: scoreTarget }];
+    description = `Enjoy a familiar collection level with your ${BREEDS[featuredBreed].name} pals.`;
+  }
+  objectives.forEach(Object.freeze);
+  return Object.freeze({
+    number,
+    name: chapter.levels[stage],
+    chapter: chapterIndex + 1,
+    chapterName: chapter.name,
+    moves: 30 + (wave >= 2 ? 1 : 0) + (stage === 9 ? 1 : 0),
+    description,
+    objectives: Object.freeze(objectives),
+    breeds: breedPool.length,
+    breedPool,
+    grassLayers,
+    grassCount,
+    ...picnic ? { bonusMoves: 2, startingSpecial: chapterIndex % 2 === 0 ? "row" : "column" } : {}
+  });
+}
+var LEVELS = Object.freeze(Array.from({ length: LEVEL_COUNT }, (_, index) => index < 180 ? makeLevel(index + 1) : makeExtendedLevel(index + 1)));
 function getLevel(number, ruleset = 2) {
   if (ruleset !== 1 && ruleset !== 2) throw new RangeError("Choose a supported Puppy Pals campaign.");
   const campaign = ruleset === 1 ? LEGACY_LEVELS : LEVELS;
@@ -962,6 +1092,7 @@ var ProgressStore = class {
 // src/puppy/profile.ts
 var BOOSTERS = ["paw", "shuffle", "rainbow"];
 var LEGACY_LEVEL_COUNT = 100;
+var PREVIOUS_CAMPAIGN_LENGTHS = [LEGACY_LEVEL_COUNT, 180];
 function emptySave() {
   return {
     version: 1,
@@ -1002,7 +1133,7 @@ function action(value) {
 function validateSave(value) {
   try {
     if (!record(value) || value.version !== 1) return null;
-    if (!Array.isArray(value.stars) || !Array.isArray(value.best) || value.stars.length !== value.best.length || ![LEGACY_LEVEL_COUNT, LEVEL_COUNT].includes(value.stars.length)) return null;
+    if (!Array.isArray(value.stars) || !Array.isArray(value.best) || value.stars.length !== value.best.length || ![...PREVIOUS_CAMPAIGN_LENGTHS, LEVEL_COUNT].includes(value.stars.length)) return null;
     if (!Number.isInteger(value.unlocked) || value.unlocked < 1 || value.unlocked > value.stars.length) return null;
     const base = emptySave();
     const count = (input, max) => Number.isInteger(input) && Number(input) >= 0 ? Math.min(Number(input), max) : 0;
@@ -1015,7 +1146,7 @@ function validateSave(value) {
     base.stars = base.stars.map((_, i) => count(value.stars[i], 3));
     base.best = base.best.map((_, i) => count(value.best[i], 1e9));
     for (const kind of BOOSTERS) base.boosters[kind] = count(record(value.boosters) ? value.boosters[kind] : void 0, 999);
-    if (base.unlocked === LEGACY_LEVEL_COUNT && base.stars[LEGACY_LEVEL_COUNT - 1] > 0) base.unlocked = Math.min(LEVEL_COUNT, LEGACY_LEVEL_COUNT + 1);
+    if (PREVIOUS_CAMPAIGN_LENGTHS.includes(base.unlocked) && base.stars[base.unlocked - 1] > 0) base.unlocked = Math.min(LEVEL_COUNT, base.unlocked + 1);
     if (value.discoveries === void 0) {
       base.discoveries = DISCOVERIES.filter((discovery) => discovery.level <= base.unlocked).map((discovery) => discovery.id);
     } else {
@@ -1062,7 +1193,17 @@ function validateSave(value) {
 async function boot() {
   const KEY = "puppy-pals-save-v1";
   const ART = "/puppy-pals/art/";
-  const TILE_COLORS = ["#fff0d9", "#f4e8d9", "#e2edf7", "#f6e5f0", "#efe5d2", "#eeebf7", "#f7edcc", "#e6e8f0", "#f6e0cf", "#eee0d1", "#e8f1f8", "#e5ece5"];
+  const TILE_COLORS = ["#fff0d9", "#f4e8d9", "#e2edf7", "#f6e5f0", "#efe5d2", "#eeebf7", "#f7edcc", "#e6e8f0", "#f6e0cf", "#eee0d1", "#e8f1f8", "#e5ece5", "#f2e3c9", "#e4e8ed", "#f8e9d1", "#e8e3dd"];
+  const REGION_TONES = [
+    ["#eee6f6", "#e4ddf1", "#716187"],
+    ["#e0eff4", "#dcecf0", "#557986"],
+    ["#fbebdb", "#f2e2cf", "#93754e"],
+    ["#e3eee1", "#ddebd8", "#617d58"],
+    ["#f3e4ed", "#eedce7", "#926e83"],
+    ["#e4e9f5", "#dde5f3", "#647397"],
+    ["#f8efdc", "#f1e7ce", "#958250"],
+    ["#e3f0eb", "#dcece5", "#5f8276"]
+  ];
   const BOOSTERS2 = {
     paw: { name: "Paw pop", cost: 40, description: "Clear one puppy without using a move." },
     shuffle: { name: "Mix it up", cost: 60, description: "Shuffle the board for a fresh start." },
@@ -1225,11 +1366,15 @@ async function boot() {
       return `<div class="breed-swatch ${unlocked ? "" : "breed-locked"}" data-breed="${i}"><div class="breed-picture" style="--tile-bg:${TILE_COLORS[i]}">${unlocked ? `<img src="${ART}dog-${i}.svg" alt="${esc(breed.name)}">` : icon("lock")}</div><span>${unlocked ? esc(breed.name) : `Level ${BREED_UNLOCKS[i]}`}</span></div>`;
     }).join("");
   }
-  function showDiscoveries() {
-    showModal("discoveries", `<h2>A little more to discover.</h2><p class="modal-subtitle">Meet new pups, try a helping paw, then put it to work. Every discovery waits for you to reach its level, at your own pace.</p><div class="journey-acts">${["First friends \xB7 1\u201324", "Growing together \xB7 25\u201348", "Puppy explorers \xB7 49\u201372"].map((act, i) => `<div class="${save.unlocked >= i * 24 + 1 ? "reached" : ""}"><span>WALK ${i + 1}</span><strong>${act}</strong></div>`).join("")}</div><div class="discovery-list">${DISCOVERIES.map((discovery) => {
+  function showDiscoveries(showAll = false) {
+    const recent = DISCOVERIES.reduce((last, discovery, i) => discovery.level <= save.unlocked ? i : last, 0);
+    const start = showAll ? 0 : Math.max(0, recent - 5);
+    const discoveries = showAll ? DISCOVERIES : DISCOVERIES.slice(start, start + 14);
+    const overview = save.unlocked <= 72 ? ["First friends \xB7 1\u201324", "Growing together \xB7 25\u201348", "Puppy explorers \xB7 49\u201372"].map((act, i) => `<div class="${save.unlocked >= i * 24 + 1 ? "reached" : ""}"><span>WALK ${i + 1}</span><strong>${act}</strong></div>`).join("") : [[`${save.stars.filter(Boolean).length} / ${LEVEL_COUNT}`, "LEVELS COMPLETE"], [`${BREED_UNLOCKS.filter((level) => level <= save.unlocked).length} / ${BREEDS.length}`, "PUPPY PALS"], [String(DISCOVERIES.filter((discovery) => discovery.level <= save.unlocked).length), "DISCOVERIES"]].map(([value, label]) => `<div class="reached"><span>${label}</span><strong>${value}</strong></div>`).join("");
+    showModal("discoveries", `<h2>A little more to discover.</h2><p class="modal-subtitle">Meet new pups, try a helping paw, then put it to work. Every discovery waits for you to reach its level, at your own pace.</p><div class="journey-acts">${overview}</div>${start ? '<p class="journal-range">Your recent discoveries and what\u2019s just ahead.</p>' : ""}<div class="discovery-list">${discoveries.map((discovery) => {
       const unlocked = discovery.level <= save.unlocked;
       return `<article class="discovery-card ${unlocked ? "discovered" : "discovery-locked"}" data-discovery="${discovery.id}"><div class="discovery-picture">${discoveryVisual(discovery, unlocked)}</div><div><span class="discovery-eyebrow">Level ${discovery.level} \xB7 ${unlocked ? "Discovered" : "Up ahead"}${discovery.kind === "challenge" ? " \xB7 Challenge" : ""}</span><h3>${esc(discovery.title)}</h3><p>${esc(discovery.description)}</p>${discovery.booster ? `<span class="discovery-gift">${discovery.amount || 1} free ${esc(BOOSTERS2[discovery.booster].name)}${(discovery.amount || 1) > 1 ? " boosts" : " boost"}</span>` : ""}</div></article>`;
-    }).join("")}</div><p class="modal-note">No rush and no daily gates. Your discoveries and puppy collection stay saved with your adventure.</p>`, true);
+    }).join("")}</div>${discoveries.length < DISCOVERIES.length ? '<button class="secondary-button" data-action="all-discoveries">View the full discovery trail</button>' : ""}<p class="modal-note">No rush and no daily gates. Your discoveries and puppy collection stay saved with your adventure.</p>`, true);
   }
   function shell() {
     $("#app").innerHTML = `
@@ -1274,9 +1419,10 @@ async function boot() {
     button.dataset.saved = String(progressStatus.saved);
     button.title = progressStatus.savedAt ? `Last saved ${new Date(progressStatus.savedAt).toLocaleString()}. Open Save & restore for a backup.` : "Open Save & restore to download a backup.";
   }
-  function mapHtml() {
+  function mapHtml(inModal = false) {
     const start = (chapter - 1) * 10;
-    return `<div class="chapter-cover"><div class="chapter-caption"><div class="eyebrow">YOUR NEXT HAPPY PLACE</div><h3>${esc(LEVELS[start].chapterName)}</h3></div></div><div class="chapter-switcher"><button data-action="chapter-prev" aria-label="Previous chapter" ${chapter === 1 ? "disabled" : ""}>${icon("back")}</button><span>Chapter ${chapter} of ${CHAPTER_COUNT}</span><button data-action="chapter-next" aria-label="Next chapter" ${chapter === CHAPTER_COUNT ? "disabled" : ""}>${icon("chevron")}</button></div><div class="level-trail">${LEVELS.slice(start, start + 10).map((level) => {
+    const tone = REGION_TONES[Math.max(0, chapter - 19) % REGION_TONES.length];
+    return `<div class="chapter-cover ${chapter > 18 ? "extended-region" : ""}" style="--chapter-sky:${tone[0]};--chapter-ground:${tone[1]};--chapter-ink:${tone[2]}"><div class="chapter-caption"><div class="eyebrow">YOUR NEXT HAPPY PLACE</div><h3>${esc(LEVELS[start].chapterName)}</h3></div></div><div class="chapter-switcher"><button data-action="chapter-prev" aria-label="Previous chapter" ${chapter === 1 ? "disabled" : ""}>${icon("back")}</button><span>Chapter ${chapter} of ${CHAPTER_COUNT}</span><button data-action="chapter-next" aria-label="Next chapter" ${chapter === CHAPTER_COUNT ? "disabled" : ""}>${icon("chevron")}</button></div><label class="chapter-picker" for="${inModal ? "chapter-jump" : "sidebar-chapter-jump"}"><span>Choose your next happy place</span><select id="${inModal ? "chapter-jump" : "sidebar-chapter-jump"}" data-action="chapter-jump" aria-label="Choose a chapter">${Array.from({ length: CHAPTER_COUNT }, (_, i) => `<option value="${i + 1}" ${chapter === i + 1 ? "selected" : ""}>${i + 1}. ${esc(LEVELS[i * 10].chapterName)}</option>`).join("")}</select></label><div class="level-trail">${LEVELS.slice(start, start + 10).map((level) => {
       const stars = save.stars[level.number - 1];
       const locked = level.number > save.unlocked;
       return `<div class="trail-item"><button class="level-node ${level.number === run.level ? "current" : stars ? "complete" : ""}" data-action="level" data-level="${level.number}" ${locked ? "disabled" : ""} aria-label="Level ${level.number}: ${esc(level.name)}${locked ? ", locked" : stars ? `, ${stars} stars` : ""}" ${level.number === run.level ? 'aria-current="step"' : ""}>${locked ? icon("lock") : level.number}</button><span aria-hidden="true" class="trail-stars ${stars ? "" : "empty"}">${"\u2605".repeat(stars)}${"\u2606".repeat(3 - stars)}</span></div>`;
@@ -1284,7 +1430,7 @@ async function boot() {
   }
   function renderMap() {
     $("#sidebar-map").innerHTML = mapHtml();
-    if (modalKind === "map") $("#modal-map").innerHTML = mapHtml();
+    if (modalKind === "map") $("#modal-map").innerHTML = mapHtml(true);
     const completed = save.stars.filter(Boolean).length;
     $("#campaign-progress").innerHTML = `<div class="chapter-progress-top"><span>YOUR HAPPY LITTLE JOURNEY</span><strong>${completed} / ${LEVEL_COUNT}</strong></div><div class="chapter-progress-track"><div class="chapter-progress-fill" style="width:${completed / LEVEL_COUNT * 100}%"></div></div><p>One match closer to ${LEVEL_COUNT}<br>tail-wagging adventures.</p>`;
   }
@@ -1916,6 +2062,7 @@ async function boot() {
     else if (action2 === "shop") showShop();
     else if (action2 === "map") showMap();
     else if (action2 === "discoveries") showDiscoveries();
+    else if (action2 === "all-discoveries") showDiscoveries(true);
     else if (action2 === "play") {
       if (displayed.won || displayed.lost) showResult(displayed.won);
       else $("#board").scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -1979,6 +2126,16 @@ async function boot() {
     else if (action2 === "install") void install();
   });
   document.addEventListener("change", (event) => {
+    const selection = event.target;
+    if (selection instanceof HTMLSelectElement && selection.dataset.action === "chapter-jump") {
+      const requested = Number(selection.value), focusId = selection.id;
+      if (Number.isInteger(requested) && requested >= 1 && requested <= CHAPTER_COUNT) {
+        chapter = requested;
+        renderMap();
+        document.getElementById(focusId)?.focus({ preventScroll: true });
+      }
+      return;
+    }
     const input = event.target;
     if (input.id === "progress-file" && input.files?.[0]) void readProgressFile(input.files[0]);
   });
@@ -1992,7 +2149,7 @@ async function boot() {
     }
     const modal = document.querySelector(".modal");
     if (modal && event.key === "Tab") {
-      const focusable = Array.from(modal.querySelectorAll("button:not(:disabled),a[href]"));
+      const focusable = Array.from(modal.querySelectorAll("button:not(:disabled),a[href],select:not(:disabled)"));
       if (event.shiftKey && document.activeElement === focusable[0]) {
         event.preventDefault();
         focusable.at(-1)?.focus();

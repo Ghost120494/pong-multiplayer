@@ -2,8 +2,8 @@
 import { discoveryForLevel, getUnlockedBreeds, isPicnicLevel } from './progression';
 
 export type CampaignRules = 1 | 2;
-export const LEVEL_COUNT = 180;
-export const CHAPTER_COUNT = 18;
+export const LEVEL_COUNT = 500;
+export const CHAPTER_COUNT = 50;
 export type ObjectiveConfig = {
   kind: "collect" | "grass" | "score" | "special" | "cascade";
   breed?: number;
@@ -43,6 +43,10 @@ export const BREEDS = Object.freeze([
   Object.freeze({ id: 9, name: "Dachshund", color: "#a77d63" }),
   Object.freeze({ id: 10, name: "Samoyed", color: "#bad5da" }),
   Object.freeze({ id: 11, name: "Border Collie", color: "#90a69a" }),
+  Object.freeze({ id: 12, name: "German Shepherd", color: "#bc9366" }),
+  Object.freeze({ id: 13, name: "Schnauzer", color: "#a1a6b4" }),
+  Object.freeze({ id: 14, name: "Cocker Spaniel", color: "#d4a278" }),
+  Object.freeze({ id: 15, name: "Bernese", color: "#9a8c86" }),
 ]);
 
 const CHAPTERS = [
@@ -154,7 +158,29 @@ const NEW_CHAPTERS = [
   { name: "Festival Fields", levels: ["Festival Welcome", "Ribbon-Race Rovers", "Confetti Corgis", "Festival of Specials", "Bunting Buddies", "Lantern-Light Pals", "Puppy Parade Practice", "Field of Friendly Faces", "The Treat-Stand Trail", "Homecoming Picnic"] },
   { name: "Homecoming Hollow", levels: ["Welcome to the Hollow", "Favorite Little Faces", "A Path of Pawprints", "The Friendship Bridge", "Homeward Howls", "The Homeward Garden", "One More Happy Match", "Every Puppy Together", "A Very Good Adventure", "Home Is Where the Pups Are"] },
 ] as const;
-const CAMPAIGN_CHAPTERS = [...CHAPTERS, ...NEW_CHAPTERS];
+/** Small themed regions add scenery and readable level names without new rules. */
+const FURTHER_CHAPTERS = [
+  ['Applewood Orchard', 'Applewood'], ['Shepherd Gardens', 'Shepherd'],
+  ['Lavender Lane', 'Lavender'], ['Cinnamon Cove', 'Cinnamon'],
+  ['Buttercup Bend', 'Buttercup'], ['Pebblebrook Path', 'Pebblebrook'],
+  ['Honeybee Hollow', 'Honeybee'], ['Willow Whiskers', 'Willow'],
+  ['Silver Birch Woods', 'Silver Birch'], ['Schnauzer Square', 'Whisker'],
+  ['Dandelion Downs', 'Dandelion'], ['Bluebell Crossing', 'Bluebell'],
+  ['Sunflower Station', 'Sunflower'], ['Seashell Shores', 'Seashell'],
+  ['Juniper Junction', 'Juniper'], ['Rosehip Ramble', 'Rosehip'],
+  ['Spaniel Springs', 'Spaniel'], ['Cloverleaf Corner', 'Cloverleaf'],
+  ['Chestnut Courtyard', 'Chestnut'], ['Firefly Falls', 'Firefly'],
+  ['Lemon Blossom Bay', 'Lemon Blossom'], ['Acorn Avenue', 'Acorn'],
+  ['Heather Highlands', 'Heather'], ['Mountain Paw Meadow', 'Mountain Paw'],
+  ['Bernese Brook', 'Bernese'], ['Pinecone Promenade', 'Pinecone'],
+  ['Foxglove Fields', 'Foxglove'], ['Daisychain Dunes', 'Daisychain'],
+  ['Starlight Steps', 'Starlight'], ['Amberleaf Arcade', 'Amberleaf'],
+  ['Friendship Forest', 'Friendship'], ['Forever Pals Park', 'Forever Pals'],
+].map(([name, theme]) => ({
+  name,
+  levels: ['Welcome', 'Wander', 'Wonders', 'Buddies', 'Garden', 'Gathering', 'Matchmakers', 'Footprints', 'Together', 'Celebration'].map(suffix => `${theme} ${suffix}`),
+}));
+const CAMPAIGN_CHAPTERS = [...CHAPTERS, ...NEW_CHAPTERS, ...FURTHER_CHAPTERS];
 
 const INTRO_NAMES: Readonly<Record<number, string>> = Object.freeze({
   2: 'A Little Helping Paw', 8: 'The First Little Garden', 14: 'A Fresh Mix of Friends',
@@ -248,7 +274,62 @@ function makeLevel(number: number): LevelConfig {
   });
 }
 
-export const LEVELS = Object.freeze(Array.from({ length: LEVEL_COUNT }, (_, index) => makeLevel(index + 1)));
+/** Later levels remix the five learned goal types with a bounded difficulty wave. */
+function makeExtendedLevel(number: number): LevelConfig {
+  const chapterIndex = Math.floor((number - 1) / 10);
+  const extensionChapter = chapterIndex - 18;
+  const stage = (number - 1) % 10;
+  const chapter = CAMPAIGN_CHAPTERS[chapterIndex];
+  const breedPool = boardPalette(number);
+  const discovery = discoveryForLevel(number);
+  const picnic = isPicnicLevel(number);
+  const featuredBreed = discovery?.breed ?? breedPool[(extensionChapter + stage) % breedPool.length];
+  const secondBreed = breedPool[(breedPool.indexOf(featuredBreed) + 2) % breedPool.length];
+  const wave = extensionChapter % 4;
+  const scoreTarget = 1800 + wave * 200 + stage * 60;
+  const collectionTarget = 14 + wave * 2;
+  const dualTarget = 9 + wave;
+  const challenge = discovery?.challenge ?? (['mixed', 'cascade', 'special', 'dual', 'grass', 'collection', 'special', 'mixed', 'cascade', 'garden-pals'] as const)[stage];
+  let grassCount = 0, grassLayers = 0;
+  let objectives: ObjectiveConfig[];
+  let description: string;
+  if (picnic) {
+    objectives = [{ kind: 'collect', breed: featuredBreed, target: 12 }, { kind: 'score', target: 1600 + wave * 150 }];
+    description = discovery?.description ?? 'A familiar picnic break: enjoy two extra opening moves, a striped puppy, and first-win treat coins.';
+  } else if (challenge === 'special') {
+    objectives = [{ kind: 'special', target: wave === 3 ? 3 : 2 }, { kind: 'collect', breed: featuredBreed, target: collectionTarget }];
+    description = 'Create specials with matches of four, five, or an L or T shape, and bring a favorite breed together.';
+  } else if (challenge === 'cascade') {
+    objectives = [{ kind: 'cascade', target: wave >= 2 ? 3 : 2 }, { kind: 'score', target: scoreTarget }];
+    description = 'Let falling puppies make extra matches. Each clearing stage after the first in a chain counts toward your cascade goal.';
+  } else if (challenge === 'dual') {
+    objectives = [{ kind: 'collect', breed: featuredBreed, target: dualTarget }, { kind: 'collect', breed: secondBreed, target: dualTarget }, { kind: 'score', target: scoreTarget }];
+    description = `Bring ${BREEDS[featuredBreed].name} and ${BREEDS[secondBreed].name} pals together, then reach the score goal.`;
+  } else if (challenge === 'grass') {
+    grassCount = 12 + wave * 2; grassLayers = extensionChapter % 3 === 0 ? 1 : 2;
+    objectives = [{ kind: 'grass', target: grassCount * grassLayers }, { kind: 'score', target: scoreTarget }];
+    description = `Match over the garden to clear ${grassLayers === 2 ? 'both layers of' : 'the'} grass and reach the score goal.`;
+  } else if (challenge === 'mixed' || challenge === 'garden-pals') {
+    grassCount = challenge === 'garden-pals' ? 12 : 10 + wave * 2; grassLayers = extensionChapter % 3 === 0 ? 1 : 2;
+    objectives = challenge === 'garden-pals'
+      ? [{ kind: 'collect', breed: featuredBreed, target: dualTarget }, { kind: 'collect', breed: secondBreed, target: dualTarget }, { kind: 'grass', target: grassCount * grassLayers }]
+      : [{ kind: 'collect', breed: featuredBreed, target: collectionTarget }, { kind: 'grass', target: grassCount * grassLayers }, { kind: 'score', target: scoreTarget }];
+    description = challenge === 'garden-pals' ? 'Bring two breeds together while clearing a small garden. Every goal uses a skill your pack already knows.' : 'Bring a favorite breed together, clear a small garden, and reach the score goal using your familiar skills.';
+  } else {
+    objectives = [{ kind: 'collect', breed: featuredBreed, target: collectionTarget }, { kind: 'score', target: scoreTarget }];
+    description = `Enjoy a familiar collection level with your ${BREEDS[featuredBreed].name} pals.`;
+  }
+  objectives.forEach(Object.freeze);
+  return Object.freeze({
+    number, name: chapter.levels[stage], chapter: chapterIndex + 1, chapterName: chapter.name,
+    moves: 30 + (wave >= 2 ? 1 : 0) + (stage === 9 ? 1 : 0),
+    description, objectives: Object.freeze(objectives) as unknown as ObjectiveConfig[], breeds: breedPool.length,
+    breedPool, grassLayers, grassCount, ...(picnic ? { bonusMoves: 2, startingSpecial: chapterIndex % 2 === 0 ? 'row' as const : 'column' as const } : {}),
+  });
+}
+
+/** The shipped first 180 definitions remain unchanged for exact rules-2 replay. */
+export const LEVELS = Object.freeze(Array.from({ length: LEVEL_COUNT }, (_, index) => index < 180 ? makeLevel(index + 1) : makeExtendedLevel(index + 1)));
 
 export function getLevel(number: number, ruleset: CampaignRules = 2): LevelConfig {
   if (ruleset !== 1 && ruleset !== 2) throw new RangeError('Choose a supported Puppy Pals campaign.');

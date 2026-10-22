@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none" role="img" aria-label="German Shepherd">
+<title>German Shepherd</title>
+<defs>
+<linearGradient id="fur" x1="35" y1="19" x2="64" y2="88" gradientUnits="userSpaceOnUse"><stop stop-color="#e9bd77"/><stop offset="1" stop-color="#bd8148"/></linearGradient>
+<linearGradient id="mask" x1="50" y1="30" x2="50" y2="80" gradientUnits="userSpaceOnUse"><stop stop-color="#4d4242"/><stop offset="1" stop-color="#302f36"/></linearGradient>
+<filter id="shadow" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy="3" stdDeviation="2" flood-color="#48352b" flood-opacity=".16"/></filter>
+</defs>
+<g filter="url(#shadow)">
+<path d="M19 43 14 12Q14 5 20 10L39 31ZM61 31 80 10Q86 5 86 12L81 43Z" fill="url(#mask)" stroke="#77604a" stroke-width="1.2" stroke-linejoin="round"/>
+<path d="m20 32-2-17 13 17M69 32l13-17-2 17" fill="#b68a85"/>
+<path d="M20 46Q20 27 43 26L49 21 55 27Q80 27 80 46L84 59 78 61 80 70 70 78 67 85 50 90 33 85 30 78 20 70 22 61 16 59Z" fill="url(#fur)"/>
+<path d="M31 33 42 29 50 40 58 29 69 33 75 47 69 60 61 65 60 79 50 84 40 79 39 65 31 60 25 47Z" fill="url(#mask)"/>
+<path d="m29 42 9-2M62 40l9 2" stroke="#d5ab71" stroke-width="3.5" stroke-linecap="round"/>
+<ellipse cx="34" cy="52" rx="5.3" ry="6" fill="#211e25"/><ellipse cx="66" cy="52" rx="5.3" ry="6" fill="#211e25"/><circle cx="32.5" cy="50" r="1.7" fill="white"/><circle cx="64.5" cy="50" r="1.7" fill="white"/><circle cx="35.9" cy="54.3" r=".8" fill="white" fill-opacity=".7"/><circle cx="67.9" cy="54.3" r=".8" fill="white" fill-opacity=".7"/>
+<path d="M35 64Q40 60 50 64Q60 60 65 64L66 73Q62 85 50 87Q38 85 34 73Z" fill="#cda06d"/>
+<path d="M44 65Q50 62 56 65Q56 70 50 72Q44 70 44 65Z" fill="#2c252c"/><ellipse cx="48.8" cy="65" rx="1.8" ry=".8" fill="white" fill-opacity=".3"/>
+<path d="M50 71V75M50 74Q45 80 41 75M50 74Q55 80 59 75" stroke="#352b30" stroke-width="1.8" stroke-linecap="round"/><path d="M46 79Q50 82 54 79V82Q50 88 46 82Z" fill="#ed93a1"/>
+</g></svg>

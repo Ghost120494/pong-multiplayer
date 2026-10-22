@@ -1,10 +1,12 @@
 # Puppy Pals
 
-A dog-themed match-3 adventure with 180 levels, twelve puppy sprites, special matches, gradually unlocked boosters, saved progress and optional PayPal attempt packs. The responsive TypeScript web app can be installed as a PWA; a Capacitor scaffold prepares for future Android and iPhone releases.
+A dog-themed match-3 adventure with 500 levels, sixteen puppy sprites, special matches, gradually unlocked boosters, saved progress and optional PayPal attempt packs. The responsive TypeScript web app can be installed as a PWA; a Capacitor scaffold prepares for future Android and iPhone releases.
 
 The discovery campaign alternates helpful bonuses with new challenges: Paw pop at level 2 before grass at 8, Shuffle at 14 before dual-breed goals at 20, then opening move bonuses, double grass, Rainbow, special-making and cascade goals, extra picnic coins and an opening line blast. New puppies join the rotating board palettes as the journey grows. The first 72 levels form three roughly hour-long walks, targeting a discovery about every 15 minutes of active play at an assumed 2½ minutes per level. These are pacing estimates, not measured retention results or time gates. See [campaign pacing and unlocks](docs/progression.md).
 
-Existing 100-level saves expand without losing stars, inventory or the current board. An unfinished original run keeps its original rules; starting another level uses the discovery campaign. Players who already completed level 100 can continue at level 101. Discovery gifts are recorded once and included in progress backups.
+The longer trail adds 32 regions, four spaced puppy welcomes, and familiar challenge remixes with bounded targets. Boards still use only five or six breeds and at most three goals. It adds no new goal types, boosters, currencies or blockers. A chapter picker lets players browse all 50 regions, while the discovery journal starts with recent and upcoming entries and can show the full trail.
+
+Existing 100- and 180-level saves expand without losing stars, inventory or the current board. An unfinished original run keeps its original rules; the shipped first 180 discovery levels also remain unchanged. Players who already completed level 100 or 180 can continue at level 101 or 181. Discovery gifts are recorded once and included in progress backups.
 
 ```sh
 npm ci

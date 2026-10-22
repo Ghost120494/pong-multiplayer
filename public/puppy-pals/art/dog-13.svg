@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none" role="img" aria-label="Schnauzer">
+<title>Schnauzer</title>
+<defs>
+<linearGradient id="fur" x1="35" y1="19" x2="64" y2="88" gradientUnits="userSpaceOnUse"><stop stop-color="#a0a6b1"/><stop offset="1" stop-color="#666e7d"/></linearGradient>
+<linearGradient id="beard" x1="50" y1="54" x2="50" y2="92" gradientUnits="userSpaceOnUse"><stop stop-color="#f5f1eb"/><stop offset="1" stop-color="#c8cbd0"/></linearGradient>
+<filter id="shadow" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy="3" stdDeviation="2" flood-color="#48352b" flood-opacity=".16"/></filter>
+</defs>
+<g filter="url(#shadow)">
+<path d="M29 30Q17 18 10 29L13 50 29 55 39 34ZM71 30Q83 18 90 29L87 50 71 55 61 34Z" fill="#545d6b"/>
+<path d="m16 32 7 10 7-11M70 31l7 11 7-10" fill="#bda5ab"/>
+<path d="M21 44Q20 28 42 26L48 21 53 26 61 23 65 29Q81 31 79 46L83 59 78 64 80 76 68 85 50 89 32 85 20 76 22 64 17 59Z" fill="url(#fur)"/>
+<path d="m24 42 7-8 13 3-2 9-9-2-9 3ZM56 37l13-3 7 8v5l-9-3-9 2Z" fill="#e1e2df"/>
+<ellipse cx="34" cy="52" rx="5.3" ry="6" fill="#382d35"/><ellipse cx="66" cy="52" rx="5.3" ry="6" fill="#382d35"/><circle cx="32.5" cy="50" r="1.7" fill="white"/><circle cx="64.5" cy="50" r="1.7" fill="white"/><circle cx="35.9" cy="54.3" r=".8" fill="white" fill-opacity=".7"/><circle cx="67.9" cy="54.3" r=".8" fill="white" fill-opacity=".7"/>
+<path d="M32 58 42 60 50 57 58 60 68 58 77 66 71 72 75 78 65 79 66 86 56 84 50 93 44 84 34 86 35 79 25 78 29 72 23 66Z" fill="url(#beard)"/>
+<path d="m33 67-5 4m39-4 5 4M36 77l-3 3m31-3 3 3" stroke="#aeb4bf" stroke-width="1.8" stroke-linecap="round"/>
+<path d="M43 63Q50 59 57 63Q57 69 50 71Q43 69 43 63Z" fill="#3b2c31"/><ellipse cx="48.8" cy="63" rx="1.9" ry=".8" fill="white" fill-opacity=".3"/>
+<path d="M50 70V74M50 73Q45 79 41 74M50 73Q55 79 59 74" stroke="#3b2c31" stroke-width="1.8" stroke-linecap="round"/><path d="M46 78Q50 82 54 78V81Q50 87 46 81Z" fill="#ed93a1"/>
+</g></svg>

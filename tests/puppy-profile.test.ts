@@ -15,6 +15,10 @@ function legacy(overrides: Record<string, unknown> = {}): any {
   return { ...profile, ...overrides };
 }
 
+function discoveryCampaign(overrides: Record<string, unknown> = {}): any {
+  return { ...emptySave(), stars: Array(180).fill(0), best: Array(180).fill(0), ...overrides };
+}
+
 function playedRun(level: number, ruleset: 1 | 2): Run {
   const game = new PuppyGame(level, 12345, ruleset);
   const actions: Action[] = [];
@@ -75,7 +79,7 @@ test('a legacy action history replays the original shipped board after campaign 
   assert.equal(JSON.stringify(source), original, 'the sanitized history shares no mutable actions with its input');
 });
 
-test('legacy progress, inventory, preferences and pending requests survive 100-to-180 padding', () => {
+test('legacy progress, inventory, preferences and pending requests survive 100-to-500 padding', () => {
   const source = legacy({
     unlocked: 60, coins: 456, sound: true, dailyAt: 1234, savedAt: 4321,
     boosters: { paw: 7, shuffle: 4, rainbow: 3 },
@@ -108,18 +112,97 @@ test('a completed legacy finale unlocks level101 while an unfinished finale rema
   assert.equal(validateSave(legacy({ unlocked: 101 })), null, 'an old-length save cannot claim levels beyond its original range');
 });
 
-test('expanded profiles round-trip new-region runs and known unique discovery claims', () => {
+test('a shipped 180-level save preserves its exact active board and all earned state while expanding to 500', () => {
+  // Captured independently from the shipped 180-level engine before expansion.
+  const actions: Action[] = [
+    { kind: 'paw', target: { r: 0, c: 0 } },
+    { kind: 'shuffle' },
+    { kind: 'rainbow', target: { r: 2, c: 2 } },
+    { kind: 'swap', a: { r: 0, c: 1 }, b: { r: 0, c: 2 } },
+    { kind: 'swap', a: { r: 0, c: 3 }, b: { r: 0, c: 4 } },
+    { kind: 'swap', a: { r: 0, c: 3 }, b: { r: 1, c: 3 } },
+    { kind: 'swap', a: { r: 1, c: 1 }, b: { r: 1, c: 2 } },
+    { kind: 'swap', a: { r: 0, c: 0 }, b: { r: 1, c: 0 } },
+  ];
+  const source = discoveryCampaign({
+    unlocked: 180, coins: 7654, sound: true, dailyAt: 1234, savedAt: 4321,
+    boosters: { paw: 7, shuffle: 4, rainbow: 3 },
+    discoveries: DISCOVERIES.filter(discovery => discovery.level <= 180).map(discovery => discovery.id),
+    offlineWallet: { lives: 2, nextLifeAt: 9876 },
+    pendingFinishes: [{ attemptId: 'waiting-old-result', outcome: 'won' }], pendingPayment: 'pending-order',
+    run: { level: 180, seed: 12345, actions, ruleset: 2, attemptId: 'active-180', mode: 'online', resultHandled: false, reservationId: 'active-reservation' },
+  });
+  source.stars[0] = 3; source.stars[178] = 2;
+  source.best[0] = 4200; source.best[178] = 16400;
+  const original = JSON.stringify(source);
+  const migrated = validateSave(source)!;
+  assert(migrated);
+  assert.equal(migrated.stars.length, 500);
+  assert.equal(migrated.best.length, 500);
+  assert.deepEqual(migrated.stars.slice(0, 180), source.stars);
+  assert.deepEqual(migrated.best.slice(0, 180), source.best);
+  assert(migrated.stars.slice(180).every(stars => stars === 0));
+  assert(migrated.best.slice(180).every(score => score === 0));
+  for (const key of ['unlocked', 'coins', 'sound', 'dailyAt', 'savedAt', 'boosters', 'discoveries', 'offlineWallet', 'pendingFinishes', 'pendingPayment', 'run'] as const) assert.deepEqual(migrated[key], source[key]);
+  const snapshot = replay(migrated.run!);
+  assert.equal(createHash('sha256').update(JSON.stringify(snapshot)).digest('hex'), '444340cda522b5836d6685ac10aa3df0f27045d1e7b26bad5d6436761998ba18');
+  assert.equal(snapshot.moves, 27);
+  assert.equal(snapshot.score, 3360);
+  assert.equal(snapshot.won, false);
+  assert.equal(snapshot.lost, false);
+  assert.equal(JSON.stringify(source), original, 'migration leaves the old stored checkpoint untouched');
+  const copy = validateSave(JSON.parse(JSON.stringify(migrated)))!;
+  assert.deepEqual(copy, migrated, 'an already migrated save is idempotent');
+});
+
+test('a completed shipped level180 opens level181 without replaying rewards or losing its finished board', () => {
+  const coordinates = [
+    [0, 3], [0, 3], [0, 6], [0, 6], [1, 2], [1, 2], [1, 5], [1, 5],
+    [2, 0], [2, 0], [2, 1], [2, 1], [2, 3], [2, 3], [2, 4], [2, 4], [2, 5], [2, 5],
+    [3, 0], [3, 0], [3, 1], [3, 1], [3, 3], [3, 3], [3, 4], [3, 6], [3, 6],
+    [4, 1], [4, 1], [4, 2], [4, 3], [5, 0], [5, 0], [5, 5], [5, 5],
+    [6, 0], [6, 0], [6, 2], [6, 2], [6, 5], [6, 5], [7, 2], [7, 2], [7, 3], [7, 3], [7, 5], [7, 5], [7, 6], [1, 2],
+  ];
+  const actions: Action[] = coordinates.map(([r, c]) => ({ kind: 'paw', target: { r, c } }));
+  const source = discoveryCampaign({
+    unlocked: 180, coins: 4321, boosters: { paw: 4, shuffle: 2, rainbow: 1 },
+    discoveries: DISCOVERIES.filter(discovery => discovery.level <= 180).map(discovery => discovery.id),
+    run: { level: 180, seed: 0, actions, ruleset: 2, attemptId: null, mode: null, resultHandled: true },
+  });
+  assert.equal(validateSave(discoveryCampaign({ unlocked: 180 }))!.unlocked, 180, 'an unfinished finale is still the current level');
+  source.stars[179] = 3; source.best[179] = 12480;
+  const migrated = validateSave(source)!;
+  assert(migrated);
+  assert.equal(migrated.unlocked, 181);
+  assert.equal(migrated.stars[179], 3);
+  assert.equal(migrated.best[179], 12480);
+  assert.equal(migrated.stars[180], 0);
+  assert.equal(migrated.coins, 4321);
+  assert.deepEqual(migrated.boosters, source.boosters);
+  assert.deepEqual(migrated.discoveries, source.discoveries);
+  assert.equal(migrated.run!.resultHandled, true);
+  const snapshot = replay(migrated.run!);
+  assert(snapshot.won);
+  assert.equal(createHash('sha256').update(JSON.stringify(snapshot)).digest('hex'), 'f8ebc53b19dd1041078b31ce82f848cde56a865867d1366ead2b734469abd7fb');
+  assert.deepEqual(validateSave(JSON.parse(JSON.stringify(migrated))), migrated, 'reload does not advance or reward the old finale again');
+  assert.equal(validateSave(discoveryCampaign({ unlocked: 181 })), null, 'a 180-entry checkpoint cannot claim unlocked progress past its shipped limit');
+});
+
+test('500-level profiles round-trip new-region runs and known unique discovery claims', () => {
   const profile = emptySave();
-  profile.unlocked = 146;
-  profile.run = playedRun(146, 2);
+  profile.unlocked = 410;
+  profile.run = playedRun(410, 2);
   profile.coins = 730;
   profile.boosters = { paw: 4, shuffle: 2, rainbow: 1 };
-  profile.discoveries = DISCOVERIES.filter(discovery => discovery.level <= 146).map(discovery => discovery.id);
+  profile.discoveries = DISCOVERIES.filter(discovery => discovery.level <= 410).map(discovery => discovery.id);
   const restored = validateSave(JSON.parse(JSON.stringify(profile)))!;
   assert(restored);
   assert.deepEqual(restored, profile);
   assert.deepEqual(replay(restored.run!), replay(profile.run));
-  assert(replay(restored.run!).board.flat().some(tile => tile && tile.breed >= 6), 'new-region history includes the expanded puppy roster');
+  assert(replay(restored.run!).board.flat().some(tile => tile && tile.breed >= 12), 'new-region history includes a newly introduced puppy');
+  profile.unlocked = 500;
+  profile.run = playedRun(500, 2);
+  assert.deepEqual(validateSave(JSON.parse(JSON.stringify(profile))), profile, 'the final campaign level also round-trips with its history');
   const one = DISCOVERIES[0].id;
   profile.discoveries = [one, one, 'unknown-future-claim'];
   assert.deepEqual(validateSave(profile)!.discoveries, [one]);
@@ -140,6 +223,8 @@ test('unrecognized rules and invalid recorded moves reject the checkpoint for ba
 test('malformed campaign arrays and non-finite timestamps cannot become durable progress metadata', () => {
   const profile = emptySave();
   assert.equal(validateSave({ ...profile, stars: Array(101).fill(0), best: Array(101).fill(0) }), null);
+  assert.equal(validateSave({ ...profile, stars: Array(181).fill(0), best: Array(181).fill(0) }), null);
+  assert.equal(validateSave({ ...profile, stars: Array(499).fill(0), best: Array(499).fill(0) }), null);
   assert.equal(validateSave({ ...profile, stars: Array(100).fill(0) }), null);
   assert.equal(validateSave({ ...profile, unlocked: LEVEL_COUNT + 1 }), null);
   assert.equal(validateSave({ ...profile, discoveries: 'all' }), null);

@@ -171,7 +171,13 @@ async function fixture(profile = freshSave(), initialActive = null) {
   });
   const page = await context.newPage();
   page.on('pageerror', error => runtimeErrors.push(error.message));
-  await page.goto(BASE); await ready(page);
+  await page.goto(BASE);
+  try { await ready(page); }
+  catch (error) {
+    console.error('Sync fixture startup diagnostics:', JSON.stringify({ runtimeErrors, state: await page.evaluate(() => ({ text: document.body.innerText, loading: document.querySelector('.board-wrap')?.dataset.loading, images: [...document.images].filter(image => !image.complete || !image.naturalWidth).map(image => image.src) })) }));
+    await page.screenshot({ path: '/tmp/puppy-sync-startup-failure.png', fullPage: true }).catch(() => {});
+    throw error;
+  }
   return { page, context, state };
 }
 

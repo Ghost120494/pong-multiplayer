@@ -3,6 +3,7 @@ import { createRequire } from 'node:module';
 import { existsSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
 import { build } from 'esbuild';
+import { createHash } from 'node:crypto';
 
 // Campaign QA uses the real app, real save migration, and legal engine histories.
 const require = createRequire(import.meta.url);
@@ -18,7 +19,7 @@ const runtimeErrors = [];
 
 function profile(level, overrides = {}) {
   return {
-    version: 1, unlocked: level, stars: Array(180).fill(0), best: Array(180).fill(0),
+    version: 1, unlocked: level, stars: Array(500).fill(0), best: Array(500).fill(0),
     coins: 120, boosters: { paw: 0, shuffle: 0, rainbow: 0 }, sound: false, dailyAt: 0,
     discoveries: [], run: { level, seed: 0, ruleset: 2, actions: [], attemptId: null, mode: null, resultHandled: false },
     offlineWallet: { lives: 5, nextLifeAt: null }, pendingFinishes: [], pendingPayment: null,
@@ -60,6 +61,17 @@ async function assertBoard(page, snapshot, label) {
   assert.deepEqual(actual, expected, `${label}: preserve exact puppies, IDs, and grass`);
   assert.equal(Number(await page.locator('#moves').innerText()), snapshot.moves, `${label}: moves`);
   assert.equal(Number((await page.locator('#score').innerText()).replaceAll(',', '')), snapshot.score, `${label}: score`);
+}
+async function boardFingerprint(page) {
+  const state = await page.evaluate(() => ({
+    tiles: [...document.querySelectorAll('#board .tile')].map(tile => ({
+      id: Number(tile.dataset.tileId), breed: Number(tile.dataset.breed),
+      grass: tile.classList.contains('grass-double') ? 2 : tile.classList.contains('grass') ? 1 : 0,
+    })),
+    moves: Number(document.querySelector('#moves').textContent),
+    score: Number(document.querySelector('#score').textContent.replaceAll(',', '')),
+  }));
+  return createHash('sha256').update(JSON.stringify(state)).digest('hex');
 }
 async function assertGoalsFit(page, label) {
   const result = await page.evaluate(() => {
@@ -106,14 +118,15 @@ function completedRun(level, ruleset) {
 }
 
 try {
-  assert.equal(LEVELS.length, 180);
-  assert.equal(BREEDS.length, 12);
+  assert.equal(LEVELS.length, 500);
+  assert.equal(BREEDS.length, 16);
   {
     const f = await fixture();
     const first = await saved(f.page);
     assert.equal(first.run.ruleset, 2, 'new players use the discovery campaign');
-    assert.equal(first.stars.length, 180);
+    assert.equal(first.stars.length, 500);
     assert.deepEqual(first.boosters, { paw: 0, shuffle: 0, rainbow: 0 });
+    for (const breed of [12, 13, 14, 15]) assert.equal(await f.page.locator(`#breed-collection [data-breed="${breed}"] img`).count(), 0, 'later puppies are not revealed to a new player');
     await assertBoosts(f.page, { paw: false, shuffle: false, rainbow: false });
     assert(await f.page.locator('#discovery-banner').isVisible(), 'the next discovery is visible without a blocking modal');
     assert.equal(await f.page.locator('.modal').count(), 0);
@@ -156,8 +169,8 @@ try {
     const f = await fixture(data);
     const migrated = await saved(f.page);
     assert.equal(migrated.run.ruleset, 1);
-    assert.equal(migrated.stars.length, 180);
-    assert.equal(migrated.best.length, 180);
+    assert.equal(migrated.stars.length, 500);
+    assert.equal(migrated.best.length, 500);
     assert.equal(migrated.stars[35], 2); assert.equal(migrated.best[35], 2460);
     assert.equal(migrated.coins, 420);
     assert.deepEqual(migrated.boosters, data.boosters, 'legacy migration does not duplicate prior introduction gifts');
@@ -166,6 +179,30 @@ try {
     await assertBoard(f.page, game.snapshot(), 'migrated run after reload');
     await f.context.close();
     console.log('Legacy migration OK: old100-entry saves retain stars, coins, inventory, and exact ruleset1 board');
+  }
+  {
+    // This history and fingerprint were captured from the shipped 180-level app
+    // before adding the extended campaign, rather than derived from new data.
+    const actions = [
+      { kind: 'swap', a: { r: 2, c: 1 }, b: { r: 3, c: 1 } },
+      { kind: 'swap', a: { r: 1, c: 3 }, b: { r: 1, c: 4 } },
+    ];
+    const stars = Array(180).fill(0); stars[178] = 2;
+    const best = Array(180).fill(0); best[178] = 4560;
+    const data = profile(180, { stars, best, coins: 789, boosters: { paw: 3, shuffle: 2, rainbow: 1 }, run: { level: 180, seed: 12345, ruleset: 2, actions, attemptId: null, mode: null, resultHandled: false } });
+    delete data.discoveries;
+    const f = await fixture(data);
+    const migrated = await saved(f.page);
+    assert.equal(migrated.unlocked, 180, 'an unfinished old finale is not skipped');
+    assert.equal(migrated.stars.length, 500); assert.equal(migrated.best.length, 500);
+    assert.equal(migrated.stars[178], 2); assert.equal(migrated.best[178], 4560);
+    assert.equal(migrated.coins, 789); assert.deepEqual(migrated.boosters, data.boosters);
+    assert.equal(migrated.run.ruleset, 2);
+    assert.equal(await boardFingerprint(f.page), 'f8d2768d39074ffd6c94a11fe570d39791d5e951c53f923f4bbbdc70371ec93b', 'the shipped180 board survives expansion exactly');
+    await f.page.reload(); await ready(f.page);
+    assert.equal(await boardFingerprint(f.page), 'f8d2768d39074ffd6c94a11fe570d39791d5e951c53f923f4bbbdc70371ec93b', 'the migrated board remains exact after reopening');
+    await f.context.close();
+    console.log('180-level migration OK: shipped ruleset2 board, score, moves, stars and inventory survive500 expansion');
   }
   {
     const { game, actions } = completedRun(100, 1);
@@ -183,6 +220,23 @@ try {
     await f.context.close();
     console.log('Expansion access OK: completed legacy level100 advances directly into ruleset2 level101');
   }
+  {
+    const { game, actions } = completedRun(180, 2);
+    const stars = Array(180).fill(0); stars[179] = 3;
+    const best = Array(180).fill(0); best[179] = game.snapshot().score;
+    const f = await fixture(profile(180, { stars, best, coins: 5678, run: { level: 180, seed: 0, ruleset: 2, actions, attemptId: null, mode: null, resultHandled: true } }));
+    assert.equal((await saved(f.page)).unlocked, 181, 'the old180-level finisher can continue');
+    assert.equal((await saved(f.page)).coins, 5678, 'the old finale is not paid again');
+    await f.page.locator('[data-action="next"]').click(); await ready(f.page);
+    assert.equal((await saved(f.page)).run.level, 181);
+    assert.equal((await saved(f.page)).run.ruleset, 2);
+    await assertBoard(f.page, new PuppyGame(181, (await saved(f.page)).run.seed, 2).snapshot(), 'first expansion board');
+    await f.page.reload(); await ready(f.page);
+    assert.equal((await saved(f.page)).run.level, 181);
+    assert.equal((await saved(f.page)).coins, 5678);
+    await f.context.close();
+    console.log('500-level access OK: a legally finished old180 save opens181 without repeating rewards');
+  }
   for (const level of [26, 32, 44, 56, 62, 68]) {
     const f = await fixture(profile(level), { width: 390 });
     const expected = new PuppyGame(level, 0, 2).snapshot();
@@ -199,6 +253,42 @@ try {
     await f.context.close();
   }
   console.log('New mechanics/mobile OK: bonus moves, new puppy, double grass, special/cascade goals, opening charm, and contained goals');
+  for (const [level, breed] of [[194, 12], [266, 13], [338, 14], [410, 15]]) {
+    const f = await fixture(profile(level), { width: 390 });
+    const expected = new PuppyGame(level, 0, 2).snapshot();
+    await assertBoard(f.page, expected, `extended puppy welcome${level}`);
+    assert((await f.page.locator(`#board img[src$="dog-${breed}.svg"]`).count()) > 0, `new breed${breed} appears in its welcome board`);
+    assert.equal(await f.page.locator(`#breed-collection [data-breed="${breed}"] img`).count(), 1, 'the new friend is revealed in the collection');
+    for (let later = breed + 1; later < 16; later++) assert.equal(await f.page.locator(`#breed-collection [data-breed="${later}"] img`).count(), 0, 'later puppy welcomes remain undiscovered');
+    assert.equal(Number(await f.page.locator('#moves').innerText()), LEVELS[level - 1].moves + 2, 'new welcomes keep the earned extra opening moves');
+    assert((await f.page.locator('.special-badge:not([hidden])').count()) > 0, 'new welcomes keep the opening stripe');
+    assert(await f.page.locator('#board img').evaluateAll(images => images.every(image => image.complete && image.naturalWidth > 0)), 'welcome sprites finish loading');
+    for (const width of [320, 390, 430]) {
+      await f.page.setViewportSize({ width, height: 1000 });
+      await assertGoalsFit(f.page, `puppy welcome${level} width${width}`);
+    }
+    if (breed === 15) {
+      await f.page.setViewportSize({ width: 390, height: 1000 });
+      await f.page.screenshot({ path: '/tmp/puppy-expanded-welcome-410.png', fullPage: true });
+    }
+    await f.page.locator('#discovery-banner button').click();
+    assert.match(await f.page.locator('.discovery-list').innerText(), new RegExp(`Level ${level}`, 'i'), 'late journal starts near the current discoveries');
+    if (breed === 15) {
+      const recentCount = await f.page.locator('.discovery-card').count();
+      assert(recentCount <= 14, 'the late journal opens a compact recent/upcoming window');
+      assert.equal(await f.page.locator('[data-discovery="paw-pop"]').count(), 0, 'the late journal does not start at the early tutorials');
+      await f.page.screenshot({ path: '/tmp/puppy-expanded-journal-recent-410.png' });
+      await f.page.locator('[data-action="all-discoveries"]').click();
+      assert((await f.page.locator('.discovery-card').count()) > recentCount, 'the complete trail remains available on request');
+      assert.equal(await f.page.locator('[data-discovery="paw-pop"]').count(), 1);
+      await f.page.screenshot({ path: '/tmp/puppy-expanded-journal-full-410.png' });
+      await f.page.locator('.modal-close').click();
+      await f.page.locator('#discovery-banner button').click();
+      assert.equal(await f.page.locator('.discovery-card').count(), recentCount, 'reopening returns to the useful recent discovery window');
+    }
+    await f.context.close();
+  }
+  console.log('Extended puppy content OK: all four new welcomes retain familiar picnic perks and fit narrow phones');
   {
     const { game, actions } = completedRun(50, 2);
     const f = await fixture(profile(50, { run: { level: 50, seed: 0, ruleset: 2, actions, attemptId: null, mode: null, resultHandled: false } }));
@@ -214,25 +304,41 @@ try {
     console.log('Picnic reward OK: first win grants the extra25coins once, including after reopening');
   }
   {
-    const f = await fixture(profile(180), { serviceWorkers: 'allow' });
+    const f = await fixture(profile(500), { width: 390, serviceWorkers: 'allow' });
     await f.page.locator('[data-action="map"]:visible').first().click();
-    assert.match(await f.page.locator('#modal-map').innerText(), /Chapter 18 of 18/);
-    assert(!(await f.page.locator('#modal-map [data-level="180"]').isDisabled()));
+    assert.match(await f.page.locator('#modal-map').innerText(), /Chapter 50 of 50/);
+    assert.equal(await f.page.locator('#chapter-jump').inputValue(), '50');
+    assert.equal(await f.page.locator('#chapter-jump option').count(), 50);
+    assert(await f.page.locator('#modal-map [data-action="chapter-next"]').isDisabled(), 'the final region has no next page');
+    assert(!(await f.page.locator('#modal-map [data-level="500"]').isDisabled()));
+    await f.page.locator('#chapter-jump').selectOption('1');
+    assert.match(await f.page.locator('#modal-map').innerText(), /Chapter 1 of 50/);
+    assert(await f.page.locator('#modal-map [data-action="chapter-prev"]').isDisabled(), 'the first region has no previous page');
+    await f.page.locator('#modal-map [data-action="chapter-next"]').click();
+    assert.equal(await f.page.locator('#chapter-jump').inputValue(), '2');
+    await f.page.locator('#chapter-jump').selectOption('50');
+    assert.equal(await f.page.locator('#modal-map .level-node').count(), 10, 'only the selected ten-level region is mounted');
+    await f.page.screenshot({ path: '/tmp/puppy-expanded-map-500.png' });
     await f.page.locator('.modal-close').click();
+    for (const width of [320, 390, 430]) {
+      await f.page.setViewportSize({ width, height: 1000 });
+      await assertGoalsFit(f.page, `final level500 width${width}`);
+    }
     await f.page.evaluate(async () => { await navigator.serviceWorker.ready; });
     await f.page.reload(); await ready(f.page);
     assert(await f.page.evaluate(() => !!navigator.serviceWorker.controller));
     await f.context.setOffline(true);
     await f.page.reload(); await ready(f.page);
-    assert.match(await f.page.locator('#level-label').innerText(), /LEVEL 180/);
+    assert.match(await f.page.locator('#level-label').innerText(), /LEVEL 500/);
+    await assertGoalsFit(f.page, 'final500-level board');
     assert(await f.page.locator('#board img').evaluateAll(images => images.every(image => image.complete && image.naturalWidth > 0)));
-    const cached = await f.page.evaluate(async () => Promise.all(Array.from({ length: 6 }, async (_, i) => {
-      const response = await fetch(`/puppy-pals/art/dog-${i + 6}.svg`);
+    const cached = await f.page.evaluate(async () => Promise.all(Array.from({ length: 16 }, async (_, i) => {
+      const response = await fetch(`/puppy-pals/art/dog-${i}.svg`);
       return response.ok && (await response.text()).includes('<svg');
     })));
-    assert(cached.every(Boolean), 'all six new puppy sprites remain available offline');
+    assert(cached.every(Boolean), 'all sixteen puppy sprites remain available offline');
     await f.context.close();
-    console.log('Expanded PWA OK: level180 and18chapters, offline reopen, and all six new sprite assets cached');
+    console.log('Expanded PWA OK: level500 and50chapters with direct navigation, offline reopen, and all sixteen sprites cached');
   }
   assert.deepEqual(runtimeErrors, [], 'no browser runtime errors');
   console.log('Puppy Pals progression browser QA passed');

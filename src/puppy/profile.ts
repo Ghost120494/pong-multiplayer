@@ -35,6 +35,7 @@ export type Save = {
 
 const BOOSTERS: Booster[] = ['paw', 'shuffle', 'rainbow'];
 const LEGACY_LEVEL_COUNT = 100;
+const PREVIOUS_CAMPAIGN_LENGTHS = [LEGACY_LEVEL_COUNT, 180];
 
 export function emptySave(): Save {
   return {
@@ -71,7 +72,7 @@ function action(value: unknown): Action | null {
 export function validateSave(value: unknown): Save | null {
   try {
     if (!record(value) || value.version !== 1) return null;
-    if (!Array.isArray(value.stars) || !Array.isArray(value.best) || value.stars.length !== value.best.length || ![LEGACY_LEVEL_COUNT, LEVEL_COUNT].includes(value.stars.length)) return null;
+    if (!Array.isArray(value.stars) || !Array.isArray(value.best) || value.stars.length !== value.best.length || ![...PREVIOUS_CAMPAIGN_LENGTHS, LEVEL_COUNT].includes(value.stars.length)) return null;
     if (!Number.isInteger(value.unlocked) || value.unlocked < 1 || value.unlocked > value.stars.length) return null;
 
     const base = emptySave();
@@ -86,8 +87,8 @@ export function validateSave(value: unknown): Save | null {
     base.best = base.best.map((_, i) => count(value.best[i], 1e9));
     for (const kind of BOOSTERS) base.boosters[kind] = count(record(value.boosters) ? value.boosters[kind] : undefined, 999);
 
-    // The old campaign capped unlocked at 100 even after its final win.
-    if (base.unlocked === LEGACY_LEVEL_COUNT && base.stars[LEGACY_LEVEL_COUNT - 1] > 0) base.unlocked = Math.min(LEVEL_COUNT, LEGACY_LEVEL_COUNT + 1);
+    // Shipped campaigns capped unlocked at their finale even after a final win.
+    if (PREVIOUS_CAMPAIGN_LENGTHS.includes(base.unlocked) && base.stars[base.unlocked - 1] > 0) base.unlocked = Math.min(LEVEL_COUNT, base.unlocked + 1);
 
     if (value.discoveries === undefined) {
       // Returning players keep their inventory and avoid duplicate starter gifts.

@@ -10,9 +10,14 @@ test('all original level metadata remains byte-equivalent for existing saved run
   assert.throws(() => getLevel(101, 1), RangeError);
 });
 
+test('shipped 180 discovery levels remain byte-equivalent for saved rules-2 runs', () => {
+  assert.equal(createHash('sha256').update(JSON.stringify(LEVELS.slice(0, 180))).digest('hex'), 'bbb750dc0ff7f214433f6daea65778bc81230567fc51ee771a3767ee120a038e');
+});
+
 test('expanded campaign has coherent goals and a bounded palette of introduced puppies', () => {
   assert.equal(LEVELS.length, LEVEL_COUNT);
-  assert.equal(LEVEL_COUNT, 180);
+  assert.equal(LEVEL_COUNT, 500);
+  assert.equal(CHAPTER_COUNT, 50);
   assert.equal(new Set(LEVELS.map(level => level.name)).size, LEVEL_COUNT);
   assert.equal(new Set(LEVELS.map(level => level.chapter)).size, CHAPTER_COUNT);
   for (const level of LEVELS) {
@@ -42,7 +47,8 @@ test('first three acts alternate a real positive discovery and a follow-up chall
   });
   assert.equal(nextDiscovery(7)?.id, 'first-grass');
   assert.equal(nextDiscovery(14)?.id, 'dual-goals');
-  assert.equal(nextDiscovery(180), undefined);
+  assert.equal(nextDiscovery(180)?.level, 182);
+  assert.equal(nextDiscovery(500), undefined);
 });
 
 test('new challenges wait until their teaching level and each booster precedes its paired challenge', () => {
@@ -57,8 +63,8 @@ test('new challenges wait until their teaching level and each booster precedes i
 });
 
 test('each new puppy enters its welcome board and never appears before its discovery', () => {
-  assert.equal(BREEDS.length, 12);
-  assert.deepEqual(BREED_UNLOCKS, [1, 1, 1, 1, 1, 14, 26, 50, 74, 98, 122, 146]);
+  assert.equal(BREEDS.length, 16);
+  assert.deepEqual(BREED_UNLOCKS, [1, 1, 1, 1, 1, 14, 26, 50, 74, 98, 122, 146, 194, 266, 338, 410]);
   for (let breed = 5; breed < BREEDS.length; breed++) {
     const at = BREED_UNLOCKS[breed];
     assert(!getUnlockedBreeds(at - 1).includes(breed));
@@ -87,4 +93,55 @@ test('earned picnic bonuses have real effects and do not leak into earlier or ch
       assert(level.objectives.every(goal => ['collect', 'score'].includes(goal.kind)));
     }
   }
+});
+
+
+test('the later trail spaces familiar picnic and challenge beats without adding rules', () => {
+  const later = DISCOVERIES.filter(discovery => discovery.level > 180);
+  assert.equal(later.length, 54);
+  assert.deepEqual(later.map(discovery => discovery.level), Array.from({ length: 54 }, (_, index) => 182 + index * 6));
+  const goalKinds = new Set(['collect', 'grass', 'score', 'special', 'cascade']);
+  later.forEach((discovery, index) => {
+    const level = getLevel(discovery.level);
+    if (index % 2 === 0) {
+      assert(discovery.kind === 'bonus' || discovery.kind === 'puppy');
+      assert.equal(level.bonusMoves, 2);
+      assert(level.startingSpecial);
+      assert.equal(firstWinBonus(level.number), 25);
+      assert.equal(level.grassCount, 0);
+      assert(level.objectives.every(goal => goal.kind === 'collect' || goal.kind === 'score'));
+    } else {
+      assert.equal(discovery.kind, 'challenge');
+      assert.equal(level.bonusMoves, undefined);
+      assert.equal(level.startingSpecial, undefined);
+      assert.equal(firstWinBonus(level.number), 0);
+      const kinds = level.objectives.map(goal => goal.kind);
+      if (discovery.challenge === 'grass') assert(kinds.includes('grass'));
+      if (discovery.challenge === 'dual') assert.equal(kinds.filter(kind => kind === 'collect').length, 2);
+      if (discovery.challenge === 'special') assert(kinds.includes('special'));
+      if (discovery.challenge === 'cascade') assert(kinds.includes('cascade'));
+      if (discovery.challenge === 'mixed') assert.deepEqual(kinds, ['collect', 'grass', 'score']);
+    }
+    assert(level.objectives.every(goal => goalKinds.has(goal.kind)));
+    assert.equal(discovery.booster, undefined, 'later welcomes reuse earned help instead of adding another boost type');
+  });
+  assert.equal(new Set(DISCOVERIES.map(discovery => discovery.id)).size, DISCOVERIES.length);
+  assert.deepEqual(later.filter(discovery => discovery.breed !== undefined).map(discovery => [discovery.level, discovery.breed]), [[194, 12], [266, 13], [338, 14], [410, 15]]);
+});
+
+test('later difficulty stays bounded and cycles through readable familiar goals', () => {
+  const later = LEVELS.slice(180);
+  assert.equal(later.length, 320);
+  for (const level of later) {
+    assert(level.moves >= 30 && level.moves <= 32);
+    assert(level.grassCount <= 18 && level.grassLayers <= 2);
+    assert(level.objectives.length >= 2 && level.objectives.length <= 3);
+    for (const goal of level.objectives) {
+      if (goal.kind === 'collect') assert(goal.target >= 9 && goal.target <= 20);
+      if (goal.kind === 'score') assert(goal.target <= 3200);
+      if (goal.kind === 'special' || goal.kind === 'cascade') assert(goal.target >= 2 && goal.target <= 3);
+    }
+  }
+  assert.equal(getLevel(500).chapter, 50);
+  assert.throws(() => getLevel(501), RangeError);
 });

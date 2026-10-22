@@ -9,11 +9,40 @@ export type Discovery = {
   booster?: BoosterKind;
   amount?: number;
   breed?: number;
+  /** Existing skills revisited by later challenge beats; not an additional mechanic. */
+  challenge?: 'grass' | 'dual' | 'special' | 'cascade' | 'mixed';
 };
 
 export const BOOSTER_UNLOCKS = Object.freeze({ paw: 2, shuffle: 14, rainbow: 38 });
 /** Indexed by the stable sprite/breed ID. */
-export const BREED_UNLOCKS: readonly number[] = Object.freeze([1, 1, 1, 1, 1, 14, 26, 50, 74, 98, 122, 146]);
+export const BREED_UNLOCKS: readonly number[] = Object.freeze([1, 1, 1, 1, 1, 14, 26, 50, 74, 98, 122, 146, 194, 266, 338, 410]);
+
+/** Later content revisits learned skills rather than adding more rules or inventory. */
+const NEW_PUPPY_WELCOMES: Readonly<Record<number, { id: string; breed: number; title: string; description: string }>> = Object.freeze({
+  194: { id: 'german-shepherd', breed: 12, title: 'Meet the German Shepherd', description: 'A bright-eyed shepherd joins the orchard trail. Meet your new pal in a gentle welcome with your earned picnic perks.' },
+  266: { id: 'schnauzer', breed: 13, title: 'Meet the Schnauzer', description: 'Meet a cheerful little pup with silver eyebrows and a wonderful whiskery smile. Enjoy an easy welcome together.' },
+  338: { id: 'cocker-spaniel', breed: 14, title: 'Meet the Cocker Spaniel', description: 'A soft-eared new friend is ready for a picnic. Match those honey-colored ears and enjoy your familiar picnic bonuses.' },
+  410: { id: 'bernese', breed: 15, title: 'Meet the Bernese', description: 'A gentle mountain pup with warm brown cheeks joins your pack. Celebrate with a welcoming picnic and familiar matches.' },
+});
+const LATER_CHALLENGES = [
+  { challenge: 'grass', title: 'A garden worth sharing', description: 'Revisit the garden: match over grass squares to clear their layers, then reach the score goal.' },
+  { challenge: 'dual', title: 'Two pals, one happy trail', description: 'Bring two familiar puppy breeds together. Watch both collection goals as you make your matches.' },
+  { challenge: 'special', title: 'A few special little matches', description: 'Create specials with matches of four, five, or an L or T shape. Newly made specials count toward the goal.' },
+  { challenge: 'cascade', title: 'Let the good matches tumble', description: 'Set off extra matches as the puppies fall. Every clearing stage after the first in a chain adds to your cascade goal.' },
+  { challenge: 'mixed', title: 'A little of everything you know', description: 'Bring one favorite breed together, clear a small garden, and reach the score goal using your familiar skills.' },
+] as const;
+const LATER_PICNICS = ['A shady little picnic', 'A sunny welcome break', 'A trail full of treats', 'A picnic with old friends', 'A cozy pause for the pack', 'A happy little reunion'];
+const LATER_DISCOVERIES: Discovery[] = Array.from({ length: 54 }, (_, index) => {
+  const level = 182 + index * 6;
+  const puppy = NEW_PUPPY_WELCOMES[level];
+  if (puppy) return { ...puppy, level, kind: 'puppy' };
+  if (index % 2 === 0) return {
+    id: `picnic-${level}`, level, kind: 'bonus', title: LATER_PICNICS[Math.floor(index / 2) % LATER_PICNICS.length],
+    description: 'Enjoy a gentler picnic with two extra opening moves, a striped puppy, and 25 extra coins for your first win. All the little helps you already know.',
+  };
+  const challenge = LATER_CHALLENGES[Math.floor(index / 2) % LATER_CHALLENGES.length];
+  return { ...challenge, id: `trail-${challenge.challenge}-${level}`, level, kind: 'challenge' };
+});
 
 export const DISCOVERIES: readonly Discovery[] = Object.freeze([
   { id: 'paw-pop', level: 2, kind: 'bonus', title: 'A little helping paw', description: 'Meet Paw pop! Try your two free pops to clear a puppy without spending a move.', booster: 'paw', amount: 2 },
@@ -49,6 +78,7 @@ export const DISCOVERIES: readonly Discovery[] = Object.freeze([
   { id: 'festival-makers', level: 164, kind: 'challenge', title: 'Festival of specials', description: 'Put your match-making practice to work and create a few happy surprises.' },
   { id: 'homecoming-picnic', level: 170, kind: 'bonus', title: 'The homecoming picnic', description: 'Gather your friends for one more gentle picnic before the final chapter.' },
   { id: 'homeward-garden', level: 176, kind: 'challenge', title: 'The homeward garden', description: 'A final garden challenge brings your collection and clearing skills together.' },
+  ...LATER_DISCOVERIES,
 ].map(discovery => Object.freeze(discovery as Discovery)));
 
 export function getUnlockedBreeds(level: number): number[] {

@@ -8,7 +8,13 @@ async function boot() {
 
 const KEY = 'puppy-pals-save-v1';
 const ART = '/puppy-pals/art/';
-const TILE_COLORS = ['#fff0d9', '#f4e8d9', '#e2edf7', '#f6e5f0', '#efe5d2', '#eeebf7', '#f7edcc', '#e6e8f0', '#f6e0cf', '#eee0d1', '#e8f1f8', '#e5ece5'];
+const TILE_COLORS = ['#fff0d9', '#f4e8d9', '#e2edf7', '#f6e5f0', '#efe5d2', '#eeebf7', '#f7edcc', '#e6e8f0', '#f6e0cf', '#eee0d1', '#e8f1f8', '#e5ece5', '#f2e3c9', '#e4e8ed', '#f8e9d1', '#e8e3dd'];
+const REGION_TONES = [
+  ['#eee6f6', '#e4ddf1', '#716187'], ['#e0eff4', '#dcecf0', '#557986'],
+  ['#fbebdb', '#f2e2cf', '#93754e'], ['#e3eee1', '#ddebd8', '#617d58'],
+  ['#f3e4ed', '#eedce7', '#926e83'], ['#e4e9f5', '#dde5f3', '#647397'],
+  ['#f8efdc', '#f1e7ce', '#958250'], ['#e3f0eb', '#dcece5', '#5f8276'],
+];
 const BOOSTERS = {
   paw: { name: 'Paw pop', cost: 40, description: 'Clear one puppy without using a move.' },
   shuffle: { name: 'Mix it up', cost: 60, description: 'Shuffle the board for a fresh start.' },
@@ -155,11 +161,17 @@ function renderDiscoveries() {
     return `<div class="breed-swatch ${unlocked ? '' : 'breed-locked'}" data-breed="${i}"><div class="breed-picture" style="--tile-bg:${TILE_COLORS[i]}">${unlocked ? `<img src="${ART}dog-${i}.svg" alt="${esc(breed.name)}">` : icon('lock')}</div><span>${unlocked ? esc(breed.name) : `Level ${BREED_UNLOCKS[i]}`}</span></div>`;
   }).join('');
 }
-function showDiscoveries() {
-  showModal('discoveries', `<h2>A little more to discover.</h2><p class="modal-subtitle">Meet new pups, try a helping paw, then put it to work. Every discovery waits for you to reach its level, at your own pace.</p><div class="journey-acts">${['First friends · 1–24', 'Growing together · 25–48', 'Puppy explorers · 49–72'].map((act, i) => `<div class="${save.unlocked >= i * 24 + 1 ? 'reached' : ''}"><span>WALK ${i + 1}</span><strong>${act}</strong></div>`).join('')}</div><div class="discovery-list">${DISCOVERIES.map(discovery => {
+function showDiscoveries(showAll = false) {
+  const recent = DISCOVERIES.reduce((last, discovery, i) => discovery.level <= save.unlocked ? i : last, 0);
+  const start = showAll ? 0 : Math.max(0, recent - 5);
+  const discoveries = showAll ? DISCOVERIES : DISCOVERIES.slice(start, start + 14);
+  const overview = save.unlocked <= 72
+    ? ['First friends · 1–24', 'Growing together · 25–48', 'Puppy explorers · 49–72'].map((act, i) => `<div class="${save.unlocked >= i * 24 + 1 ? 'reached' : ''}"><span>WALK ${i + 1}</span><strong>${act}</strong></div>`).join('')
+    : [[`${save.stars.filter(Boolean).length} / ${LEVEL_COUNT}`, 'LEVELS COMPLETE'], [`${BREED_UNLOCKS.filter(level => level <= save.unlocked).length} / ${BREEDS.length}`, 'PUPPY PALS'], [String(DISCOVERIES.filter(discovery => discovery.level <= save.unlocked).length), 'DISCOVERIES']].map(([value, label]) => `<div class="reached"><span>${label}</span><strong>${value}</strong></div>`).join('');
+  showModal('discoveries', `<h2>A little more to discover.</h2><p class="modal-subtitle">Meet new pups, try a helping paw, then put it to work. Every discovery waits for you to reach its level, at your own pace.</p><div class="journey-acts">${overview}</div>${start ? '<p class="journal-range">Your recent discoveries and what’s just ahead.</p>' : ''}<div class="discovery-list">${discoveries.map(discovery => {
     const unlocked = discovery.level <= save.unlocked;
     return `<article class="discovery-card ${unlocked ? 'discovered' : 'discovery-locked'}" data-discovery="${discovery.id}"><div class="discovery-picture">${discoveryVisual(discovery, unlocked)}</div><div><span class="discovery-eyebrow">Level ${discovery.level} · ${unlocked ? 'Discovered' : 'Up ahead'}${discovery.kind === 'challenge' ? ' · Challenge' : ''}</span><h3>${esc(discovery.title)}</h3><p>${esc(discovery.description)}</p>${discovery.booster ? `<span class="discovery-gift">${discovery.amount || 1} free ${esc(BOOSTERS[discovery.booster].name)}${(discovery.amount || 1) > 1 ? ' boosts' : ' boost'}</span>` : ''}</div></article>`;
-  }).join('')}</div><p class="modal-note">No rush and no daily gates. Your discoveries and puppy collection stay saved with your adventure.</p>`, true);
+  }).join('')}</div>${discoveries.length < DISCOVERIES.length ? '<button class="secondary-button" data-action="all-discoveries">View the full discovery trail</button>' : ''}<p class="modal-note">No rush and no daily gates. Your discoveries and puppy collection stay saved with your adventure.</p>`, true);
 }
 
 function shell() {
@@ -205,16 +217,17 @@ function renderSaveStatus() {
   button.dataset.saved = String(progressStatus.saved);
   button.title = progressStatus.savedAt ? `Last saved ${new Date(progressStatus.savedAt).toLocaleString()}. Open Save & restore for a backup.` : 'Open Save & restore to download a backup.';
 }
-function mapHtml() {
+function mapHtml(inModal = false) {
   const start = (chapter - 1) * 10;
-  return `<div class="chapter-cover"><div class="chapter-caption"><div class="eyebrow">YOUR NEXT HAPPY PLACE</div><h3>${esc(LEVELS[start].chapterName)}</h3></div></div><div class="chapter-switcher"><button data-action="chapter-prev" aria-label="Previous chapter" ${chapter === 1 ? 'disabled' : ''}>${icon('back')}</button><span>Chapter ${chapter} of ${CHAPTER_COUNT}</span><button data-action="chapter-next" aria-label="Next chapter" ${chapter === CHAPTER_COUNT ? 'disabled' : ''}>${icon('chevron')}</button></div><div class="level-trail">${LEVELS.slice(start, start + 10).map(level => {
+  const tone = REGION_TONES[Math.max(0, chapter - 19) % REGION_TONES.length];
+  return `<div class="chapter-cover ${chapter > 18 ? 'extended-region' : ''}" style="--chapter-sky:${tone[0]};--chapter-ground:${tone[1]};--chapter-ink:${tone[2]}"><div class="chapter-caption"><div class="eyebrow">YOUR NEXT HAPPY PLACE</div><h3>${esc(LEVELS[start].chapterName)}</h3></div></div><div class="chapter-switcher"><button data-action="chapter-prev" aria-label="Previous chapter" ${chapter === 1 ? 'disabled' : ''}>${icon('back')}</button><span>Chapter ${chapter} of ${CHAPTER_COUNT}</span><button data-action="chapter-next" aria-label="Next chapter" ${chapter === CHAPTER_COUNT ? 'disabled' : ''}>${icon('chevron')}</button></div><label class="chapter-picker" for="${inModal ? 'chapter-jump' : 'sidebar-chapter-jump'}"><span>Choose your next happy place</span><select id="${inModal ? 'chapter-jump' : 'sidebar-chapter-jump'}" data-action="chapter-jump" aria-label="Choose a chapter">${Array.from({ length: CHAPTER_COUNT }, (_, i) => `<option value="${i + 1}" ${chapter === i + 1 ? 'selected' : ''}>${i + 1}. ${esc(LEVELS[i * 10].chapterName)}</option>`).join('')}</select></label><div class="level-trail">${LEVELS.slice(start, start + 10).map(level => {
     const stars = save.stars[level.number - 1]; const locked = level.number > save.unlocked;
     return `<div class="trail-item"><button class="level-node ${level.number === run.level ? 'current' : stars ? 'complete' : ''}" data-action="level" data-level="${level.number}" ${locked ? 'disabled' : ''} aria-label="Level ${level.number}: ${esc(level.name)}${locked ? ', locked' : stars ? `, ${stars} stars` : ''}" ${level.number === run.level ? 'aria-current="step"' : ''}>${locked ? icon('lock') : level.number}</button><span aria-hidden="true" class="trail-stars ${stars ? '' : 'empty'}">${'★'.repeat(stars)}${'☆'.repeat(3 - stars)}</span></div>`;
   }).join('')}</div><div class="adventure-footer">${icon('lock')}A new adventure with every little win.</div>`;
 }
 function renderMap() {
   $('#sidebar-map').innerHTML = mapHtml();
-  if (modalKind === 'map') $('#modal-map').innerHTML = mapHtml();
+  if (modalKind === 'map') $('#modal-map').innerHTML = mapHtml(true);
   const completed = save.stars.filter(Boolean).length;
   $('#campaign-progress').innerHTML = `<div class="chapter-progress-top"><span>YOUR HAPPY LITTLE JOURNEY</span><strong>${completed} / ${LEVEL_COUNT}</strong></div><div class="chapter-progress-track"><div class="chapter-progress-fill" style="width:${completed / LEVEL_COUNT * 100}%"></div></div><p>One match closer to ${LEVEL_COUNT}<br>tail-wagging adventures.</p>`;
 }
@@ -662,6 +675,7 @@ document.addEventListener('click', event => {
   else if (action === 'shop') showShop();
   else if (action === 'map') showMap();
   else if (action === 'discoveries') showDiscoveries();
+  else if (action === 'all-discoveries') showDiscoveries(true);
   else if (action === 'play') { if (displayed.won || displayed.lost) showResult(displayed.won); else $('#board').scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
   else if (action === 'sound') { save.sound = !save.sound; persist(); renderWallet(); sound('tap'); }
   else if (action === 'hint') hint();
@@ -687,6 +701,14 @@ document.addEventListener('click', event => {
   else if (action === 'install') void install();
 });
 document.addEventListener('change', event => {
+  const selection = event.target;
+  if (selection instanceof HTMLSelectElement && selection.dataset.action === 'chapter-jump') {
+    const requested = Number(selection.value), focusId = selection.id;
+    if (Number.isInteger(requested) && requested >= 1 && requested <= CHAPTER_COUNT) {
+      chapter = requested; renderMap(); document.getElementById(focusId)?.focus({ preventScroll: true });
+    }
+    return;
+  }
   const input = event.target as HTMLInputElement;
   if (input.id === 'progress-file' && input.files?.[0]) void readProgressFile(input.files[0]);
 });
@@ -694,7 +716,7 @@ document.addEventListener('keydown', event => {
   if (event.key === 'Escape') { closeModal(); selected = null; activeBooster = null; renderBoard(displayed); renderWallet(); }
   const modal = document.querySelector('.modal');
   if (modal && event.key === 'Tab') {
-    const focusable = Array.from(modal.querySelectorAll<HTMLElement>('button:not(:disabled),a[href]'));
+    const focusable = Array.from(modal.querySelectorAll<HTMLElement>('button:not(:disabled),a[href],select:not(:disabled)'));
     if (event.shiftKey && document.activeElement === focusable[0]) { event.preventDefault(); focusable.at(-1)?.focus(); }
     else if (!event.shiftKey && document.activeElement === focusable.at(-1)) { event.preventDefault(); focusable[0]?.focus(); }
   }

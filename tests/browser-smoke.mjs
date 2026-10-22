@@ -181,7 +181,7 @@ try {
   await closeModal(page);
   await page.locator('.nav-links [data-action="map"]').click();
   const chapters = Math.ceil(LEVELS.length / 10);
-  for (let i = 1; i < chapters; i++) await page.locator('#modal-map [data-action="chapter-next"]').click();
+  await page.locator('#chapter-jump').selectOption(String(chapters));
   assert.match(await page.locator('#modal-map').innerText(), new RegExp(`Chapter ${chapters} of ${chapters}`));
   assert(await page.locator(`#modal-map [data-level="${LEVELS.length}"]`).isDisabled(), 'the expanded final level exists and respects progression lock');
   await closeModal(page);

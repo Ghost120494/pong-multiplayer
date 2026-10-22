@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none" role="img" aria-label="Cocker Spaniel">
+<title>Cocker Spaniel</title>
+<defs>
+<linearGradient id="fur" x1="35" y1="19" x2="64" y2="88" gradientUnits="userSpaceOnUse"><stop stop-color="#f0cc88"/><stop offset="1" stop-color="#cc9552"/></linearGradient>
+<linearGradient id="ears" x1="50" y1="30" x2="50" y2="87" gradientUnits="userSpaceOnUse"><stop stop-color="#b97b42"/><stop offset="1" stop-color="#9b633f"/></linearGradient>
+<filter id="shadow" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy="3" stdDeviation="2" flood-color="#48352b" flood-opacity=".16"/></filter>
+</defs>
+<g filter="url(#shadow)">
+<path d="M29 29Q12 23 8 40L5 48 8 54 4 63 7 69 5 78 12 80 15 87 24 83 29 86 33 72 36 44ZM71 29Q88 23 92 40L95 48 92 54 96 63 93 69 95 78 88 80 85 87 76 83 71 86 67 72 64 44Z" fill="url(#ears)"/>
+<path d="M14 41q-5 9 0 16t-1 19M22 40q-5 9 0 16t-1 20M86 41q5 9 0 16t1 19M78 40q5 9 0 16t1 20" stroke="#d6a56c" stroke-width="2.6" stroke-linecap="round"/>
+<path d="M23 45Q21 27 39 25Q40 17 49 21Q59 16 62 25Q79 27 77 45L78 65Q75 84 50 90Q25 84 22 65Z" fill="url(#fur)"/>
+<path d="M41 28q8-5 15 0" stroke="#e9bb74" stroke-width="3" stroke-linecap="round"/>
+<path d="M27 41q6-4 12-1M61 40q6-3 12 1" stroke="#a77948" stroke-width="2.5" stroke-linecap="round"/>
+<path d="M38 60Q50 54 62 60Q75 68 66 81L50 88 34 81Q25 68 38 60Z" fill="#f5ddb2"/>
+<ellipse cx="28" cy="65" rx="4.5" ry="2.8" fill="#dd9b83" fill-opacity=".65"/><ellipse cx="72" cy="65" rx="4.5" ry="2.8" fill="#dd9b83" fill-opacity=".65"/>
+<ellipse cx="34" cy="52" rx="5.3" ry="6" fill="#382d35"/><ellipse cx="66" cy="52" rx="5.3" ry="6" fill="#382d35"/><circle cx="32.5" cy="50" r="1.7" fill="white"/><circle cx="64.5" cy="50" r="1.7" fill="white"/><circle cx="35.9" cy="54.3" r=".8" fill="white" fill-opacity=".7"/><circle cx="67.9" cy="54.3" r=".8" fill="white" fill-opacity=".7"/>
+<path d="M44 64Q50 60 56 64Q56 69 50 71Q44 69 44 64Z" fill="#4b3030"/><ellipse cx="48.8" cy="64" rx="1.8" ry=".8" fill="white" fill-opacity=".3"/>
+<path d="M50 70V74M50 73Q45 79 41 74M50 73Q55 79 59 74" stroke="#4b3030" stroke-width="1.8" stroke-linecap="round"/><path d="M46 78Q50 82 54 78V81Q50 87 46 81Z" fill="#ed93a1"/>
+</g></svg>

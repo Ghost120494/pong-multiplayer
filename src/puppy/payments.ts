@@ -8,7 +8,6 @@ const MAX_LIVES = 5;
 const REFILL_MS = 30 * 60 * 1000;
 const FINISHED_ATTEMPT_LIMIT = 100;
 export const ATTEMPT_PACK = Object.freeze({ attempts: 5, price: "0.99", currency: "USD" });
-export const PAYPAL_MERCHANT_EMAIL = "jasonwilliams1204@gmail.com";
 type Attempt = { id: string; source: "life" | "paid"; startedAt: number; requestId?: string };
 type Wallet = { lives: number; refillAt: number | null; paidAttempts: number; active: Attempt | null; lastFinished?: string; finishedAttempts?: string[] };
 type Purchase = { owner: string; reference: string; requestId: string; credited: boolean; captureId?: string };
@@ -103,6 +102,17 @@ function refill(wallet: Wallet, at: number) {
   wallet.refillAt = wallet.lives === MAX_LIVES ? null : wallet.refillAt + count * REFILL_MS;
 }
 
+/** A documentation placeholder must never enable a real checkout. */
+function configuredMerchant(value: string | undefined): string {
+  const email = value?.trim() ?? "";
+  if (email.length > 254 || !/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(email)) return "";
+  const domain = email.split("@")[1].toLowerCase();
+  if (!/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i.test(domain) ||
+      domain.endsWith(".invalid") || domain.endsWith(".example") || domain.endsWith(".localhost") ||
+      ["example.com", "example.net", "example.org"].some(example => domain === example || domain.endsWith(`.${example}`))) return "";
+  return email;
+}
+
 export function createPuppyApi(options: PuppyApiOptions = {}) {
   const env = options.env ?? process.env;
   const now = options.now ?? Date.now;
@@ -110,8 +120,8 @@ export function createPuppyApi(options: PuppyApiOptions = {}) {
   const production = env.NODE_ENV === "production";
   const cookieName = production ? "__Host-puppy_session" : "puppy_session";
   const live = env.PAYPAL_ENV === "live";
-  const merchantEmail = !live && env.PAYPAL_SANDBOX_MERCHANT_EMAIL
-    ? env.PAYPAL_SANDBOX_MERCHANT_EMAIL : PAYPAL_MERCHANT_EMAIL;
+  const merchantEmail = configuredMerchant(!live && env.PAYPAL_SANDBOX_MERCHANT_EMAIL?.trim()
+    ? env.PAYPAL_SANDBOX_MERCHANT_EMAIL : env.PAYPAL_MERCHANT_EMAIL);
   const paypalBase = live ? "https://api-m.paypal.com" : "https://api-m.sandbox.paypal.com";
   let publicUrl: URL | undefined;
   try {
@@ -123,7 +133,7 @@ export function createPuppyApi(options: PuppyApiOptions = {}) {
       publicUrl = parsed;
     }
   } catch { /* Invalid configuration keeps paid checkout unavailable. */ }
-  const paymentsAvailable = !!(env.PAYPAL_CLIENT_ID && env.PAYPAL_CLIENT_SECRET && publicUrl &&
+  const paymentsAvailable = !!(merchantEmail && env.PAYPAL_CLIENT_ID && env.PAYPAL_CLIENT_SECRET && publicUrl &&
     (!production || env.PUPPY_DATA_DIR || options.dataDir));
   const store = new Store(options.dataDir ?? env.PUPPY_DATA_DIR ?? path.join(os.tmpdir(), "puppy-pals-data"));
   let token = { value: "", expiresAt: 0 };
@@ -303,6 +313,7 @@ export function createPuppyApi(options: PuppyApiOptions = {}) {
           store.save(); send(res, 200, { orderId: order.id, approvalUrl }); return;
         }
         if (route === "/api/puppy/paypal/capture" && req.method === "POST") {
+          if (!paymentsAvailable) throw new ApiError(503, "Purchases are not available yet. Free lives refill every 30 minutes.");
           if (typeof input.orderId !== "string" || !/^[A-Z0-9]{5,64}$/.test(input.orderId)) throw new ApiError(400, "A valid PayPal order is required.");
           const orderId = input.orderId;
           const purchase = Object.hasOwn(store.data.orders, orderId) ? store.data.orders[orderId] : undefined;

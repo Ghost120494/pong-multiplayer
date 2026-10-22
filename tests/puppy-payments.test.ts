@@ -4,21 +4,27 @@ import http from "node:http";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { createPuppyApi, PAYPAL_MERCHANT_EMAIL } from "../src/puppy/payments";
+import { createPuppyApi } from "../src/puppy/payments";
 
-function fakePayPal() {
+const TEST_MERCHANT_EMAIL = "merchant@merchant.test";
+
+function fakePayPal(merchantEmail = TEST_MERCHANT_EMAIL) {
   const orders = new Map<string, any>();
+  const requests: string[] = [];
   let captures = 0;
   let mode = "normal";
   let failAfterCapture = false;
   const fetch = (async (url: string | URL | Request, options?: RequestInit) => {
-    const route = String(url).replace("https://api-m.sandbox.paypal.com", "");
+    requests.push(String(url));
+    const requestUrl = new URL(String(url));
+    assert(["api-m.sandbox.paypal.com", "api-m.paypal.com"].includes(requestUrl.hostname));
+    const route = requestUrl.pathname;
     if (route === "/v1/oauth2/token") return Response.json({ access_token: "test-token", expires_in: 300 });
     assert.equal((options?.headers as any).authorization, "Bearer test-token");
     if (route === "/v2/checkout/orders") {
       const request = JSON.parse(String(options?.body));
       assert.equal(request.purchase_units[0].amount.value, "0.99");
-      assert.equal(request.purchase_units[0].payee.email_address, PAYPAL_MERCHANT_EMAIL);
+      assert.equal(request.purchase_units[0].payee.email_address, merchantEmail);
       const id = `ORDER${orders.size + 1}TEST`;
       const order = { id, status: "APPROVED", purchase_units: request.purchase_units };
       orders.set(id, order);
@@ -41,17 +47,18 @@ function fakePayPal() {
     }
     return Response.json(order);
   }) as typeof globalThis.fetch;
-  return { fetch, orders, get captures() { return captures; }, set mode(value: string) { mode = value; }, set failAfterCapture(value: boolean) { failAfterCapture = value; } };
+  return { fetch, orders, requests, get captures() { return captures; }, set mode(value: string) { mode = value; }, set failAfterCapture(value: boolean) { failAfterCapture = value; } };
 }
 
-async function fixture(t: any, enabled = true, production = false) {
+async function fixture(t: any, enabled = true, production = false, envOverrides: NodeJS.ProcessEnv = {}) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "puppy-payments-test-"));
   let clock = 1_000_000;
-  const paypal = fakePayPal();
-  const env = enabled ? {
+  const env: NodeJS.ProcessEnv = { ...(enabled ? {
     PAYPAL_CLIENT_ID: "test-client", PAYPAL_CLIENT_SECRET: "test-secret", PAYPAL_ENV: "sandbox",
+    PAYPAL_MERCHANT_EMAIL: TEST_MERCHANT_EMAIL,
     PUPPY_PUBLIC_URL: "http://localhost:9999", NODE_ENV: production ? "production" : "test",
-  } : { NODE_ENV: production ? "production" : "test" };
+  } : { NODE_ENV: production ? "production" : "test" }), ...envOverrides };
+  const paypal = fakePayPal(env.PAYPAL_ENV === "live" ? env.PAYPAL_MERCHANT_EMAIL : env.PAYPAL_SANDBOX_MERCHANT_EMAIL?.trim() || env.PAYPAL_MERCHANT_EMAIL);
   const options = { env, dataDir: directory, now: () => clock, fetch: paypal.fetch };
   let handler = createPuppyApi(options);
   const server = http.createServer(async (req, res) => {
@@ -420,6 +427,65 @@ test("missing merchant credentials disable checkout while leaving free gameplay 
   assert.equal(current.body.paymentsAvailable, false);
   assert.equal(current.body.lives, 5);
   assert.equal((await player.request("paypal/orders", {})).status, 503);
+});
+
+test("missing and placeholder recipients keep both payment endpoints disabled without contacting PayPal", async t => {
+  for (const merchant of [undefined, "", "   ", "merchant@example.invalid", "merchant@example.com", "merchant@example.net", "merchant@example.org", "merchant@sub.example.com", "merchant@example.com.", "merchant@https://example.com", "not-configured"]) {
+    const f = await fixture(t, true, false, { PAYPAL_MERCHANT_EMAIL: merchant });
+    const player = f.client();
+    const initial = await player.request("state");
+    assert.equal(initial.body.paymentsAvailable, false, `recipient ${String(merchant)} is not a configured merchant`);
+    assert.equal((await player.request("paypal/orders", {})).status, 503);
+    assert.equal((await player.request("paypal/capture", { orderId: "ORDERPLACEHOLDER" })).status, 503);
+    assert.deepEqual(f.paypal.requests, [], "disabled checkout makes no remote request");
+    assert.equal((await player.request("state")).body.paidAttempts, 0);
+    assert.equal((await player.request("attempt/start", {})).status, 200, "free gameplay remains available");
+  }
+});
+
+test("sandbox checkout uses its explicit recipient override and verifies that recipient", async t => {
+  const sandboxMerchant = "sandbox@merchant.test";
+  const f = await fixture(t, true, false, { PAYPAL_MERCHANT_EMAIL: "live@merchant.test", PAYPAL_SANDBOX_MERCHANT_EMAIL: sandboxMerchant });
+  const player = f.client();
+  assert.equal((await player.request("state")).body.paymentsAvailable, true);
+  const created = await player.request("paypal/orders", {});
+  assert.equal(created.status, 200);
+  assert.equal(f.paypal.orders.get(created.body.orderId).purchase_units[0].payee.email_address, sandboxMerchant);
+  assert.equal((await player.request("paypal/capture", { orderId: created.body.orderId })).body.paidAttempts, 5);
+  assert(f.paypal.requests.every(url => new URL(url).hostname === "api-m.sandbox.paypal.com"));
+});
+
+test("live checkout never uses a sandbox override and cannot credit its recipient", async t => {
+  const liveMerchant = "live@merchant.test", sandboxMerchant = "sandbox@merchant.test";
+  const f = await fixture(t, true, false, {
+    PAYPAL_ENV: "live", PUPPY_PUBLIC_URL: "https://game.merchant.test",
+    PAYPAL_MERCHANT_EMAIL: liveMerchant, PAYPAL_SANDBOX_MERCHANT_EMAIL: sandboxMerchant,
+  });
+  const player = f.client();
+  assert.equal((await player.request("state")).body.paymentsAvailable, true);
+  const created = await player.request("paypal/orders", {});
+  assert.equal(created.status, 200);
+  const order = f.paypal.orders.get(created.body.orderId);
+  assert.equal(order.purchase_units[0].payee.email_address, liveMerchant);
+  order.purchase_units[0].payee.email_address = sandboxMerchant;
+  assert.equal((await player.request("paypal/capture", { orderId: created.body.orderId })).status, 409);
+  assert.equal(f.paypal.captures, 0, "a recipient mismatch is rejected before capturing");
+  assert.equal((await player.request("state")).body.paidAttempts, 0);
+  order.purchase_units[0].payee.email_address = liveMerchant;
+  assert.equal((await player.request("paypal/capture", { orderId: created.body.orderId })).body.paidAttempts, 5);
+  assert(f.paypal.requests.every(url => new URL(url).hostname === "api-m.paypal.com"));
+});
+
+test("a live merchant must be configured independently of sandbox settings", async t => {
+  const f = await fixture(t, true, false, {
+    PAYPAL_ENV: "live", PUPPY_PUBLIC_URL: "https://game.merchant.test",
+    PAYPAL_MERCHANT_EMAIL: undefined, PAYPAL_SANDBOX_MERCHANT_EMAIL: "sandbox@merchant.test",
+  });
+  const player = f.client();
+  assert.equal((await player.request("state")).body.paymentsAvailable, false);
+  assert.equal((await player.request("paypal/orders", {})).status, 503);
+  assert.equal((await player.request("paypal/capture", { orderId: "ORDERPLACEHOLDER" })).status, 503);
+  assert.deepEqual(f.paypal.requests, []);
 });
 
 test("cross-origin mutations and malformed JSON are rejected", async t => {

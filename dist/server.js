@@ -3799,7 +3799,6 @@ var MAX_LIVES = 5;
 var REFILL_MS = 30 * 60 * 1e3;
 var FINISHED_ATTEMPT_LIMIT = 100;
 var ATTEMPT_PACK = Object.freeze({ attempts: 5, price: "0.99", currency: "USD" });
-var PAYPAL_MERCHANT_EMAIL = "jasonwilliams1204@gmail.com";
 var ApiError = class extends Error {
   constructor(status, message, code, wallet) {
     super(message);
@@ -3897,6 +3896,13 @@ function refill(wallet, at) {
   wallet.lives = Math.min(MAX_LIVES, wallet.lives + count);
   wallet.refillAt = wallet.lives === MAX_LIVES ? null : wallet.refillAt + count * REFILL_MS;
 }
+function configuredMerchant(value) {
+  const email = value?.trim() ?? "";
+  if (email.length > 254 || !/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(email)) return "";
+  const domain = email.split("@")[1].toLowerCase();
+  if (!/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i.test(domain) || domain.endsWith(".invalid") || domain.endsWith(".example") || domain.endsWith(".localhost") || ["example.com", "example.net", "example.org"].some((example) => domain === example || domain.endsWith(`.${example}`))) return "";
+  return email;
+}
 function createPuppyApi(options = {}) {
   const env = options.env ?? process.env;
   const now = options.now ?? Date.now;
@@ -3904,7 +3910,7 @@ function createPuppyApi(options = {}) {
   const production = env.NODE_ENV === "production";
   const cookieName = production ? "__Host-puppy_session" : "puppy_session";
   const live = env.PAYPAL_ENV === "live";
-  const merchantEmail = !live && env.PAYPAL_SANDBOX_MERCHANT_EMAIL ? env.PAYPAL_SANDBOX_MERCHANT_EMAIL : PAYPAL_MERCHANT_EMAIL;
+  const merchantEmail = configuredMerchant(!live && env.PAYPAL_SANDBOX_MERCHANT_EMAIL?.trim() ? env.PAYPAL_SANDBOX_MERCHANT_EMAIL : env.PAYPAL_MERCHANT_EMAIL);
   const paypalBase = live ? "https://api-m.paypal.com" : "https://api-m.sandbox.paypal.com";
   let publicUrl;
   try {
@@ -3917,7 +3923,7 @@ function createPuppyApi(options = {}) {
     }
   } catch {
   }
-  const paymentsAvailable = !!(env.PAYPAL_CLIENT_ID && env.PAYPAL_CLIENT_SECRET && publicUrl && (!production || env.PUPPY_DATA_DIR || options.dataDir));
+  const paymentsAvailable = !!(merchantEmail && env.PAYPAL_CLIENT_ID && env.PAYPAL_CLIENT_SECRET && publicUrl && (!production || env.PUPPY_DATA_DIR || options.dataDir));
   const store = new Store(options.dataDir ?? env.PUPPY_DATA_DIR ?? import_node_path.default.join(import_node_os.default.tmpdir(), "puppy-pals-data"));
   let token = { value: "", expiresAt: 0 };
   const rates = /* @__PURE__ */ new Map();
@@ -4134,6 +4140,7 @@ function createPuppyApi(options = {}) {
           return;
         }
         if (route === "/api/puppy/paypal/capture" && req.method === "POST") {
+          if (!paymentsAvailable) throw new ApiError(503, "Purchases are not available yet. Free lives refill every 30 minutes.");
           if (typeof input.orderId !== "string" || !/^[A-Z0-9]{5,64}$/.test(input.orderId)) throw new ApiError(400, "A valid PayPal order is required.");
           const orderId = input.orderId;
           const purchase = Object.hasOwn(store.data.orders, orderId) ? store.data.orders[orderId] : void 0;

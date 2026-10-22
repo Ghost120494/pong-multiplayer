@@ -1,6 +1,6 @@
 # Puppy Pals payments
 
-The web edition offers **five extra attempts for $0.99 USD** through PayPal. The purchase recipient is fixed in server code to **jasonwilliams1204@gmail.com**. An email address by itself does not enable checkout. No live payment has been made or tested by this implementation.
+The web edition has a planned pack of **five extra attempts for $0.99 USD** through PayPal. Merchant details currently use the non-payable placeholder **`merchant@example.invalid`**. No personal recipient is embedded in the game or server. The shop shows **Purchases coming soon** while payment setup is incomplete. No live payment has been made or tested by this implementation.
 
 ## Merchant setup
 
@@ -11,11 +11,12 @@ Create a PayPal REST application for the merchant account in the [PayPal Develop
 | `PAYPAL_CLIENT_ID` | PayPal REST application client ID. |
 | `PAYPAL_CLIENT_SECRET` | PayPal REST application secret. |
 | `PAYPAL_ENV` | `sandbox` while testing; `live` only when ready for real charges. Defaults to sandbox. |
-| `PAYPAL_SANDBOX_MERCHANT_EMAIL` | Optional sandbox business-account email. Ignored in live mode, which always uses `jasonwilliams1204@gmail.com`. |
+| `PAYPAL_MERCHANT_EMAIL` | Real merchant recipient email, configured privately on the server. Missing values and reserved example/placeholder domains keep checkout disabled. The checked-in example is `merchant@example.invalid`. |
+| `PAYPAL_SANDBOX_MERCHANT_EMAIL` | Optional sandbox business-account email overriding `PAYPAL_MERCHANT_EMAIL` only in sandbox. Ignored in live mode. |
 | `PUPPY_PUBLIC_URL` | Exact origin of the game, e.g. `https://puppypals.example.com`, with no path/query. Live checkout requires HTTPS. Sandbox accepts local `http://localhost:8080`. |
 | `PUPPY_DATA_DIR` | Writable directory on a **persistent volume** for wallet balances, sessions, order ownership, and capture receipts. Required to enable checkout in production. |
 
-The PayPal application must be authorized to receive payment for the specified recipient. Sandbox needs merchant/recipient configuration that PayPal's sandbox recognizes; a live email address is not automatically a sandbox business account. If sandbox uses a different business-account email, set `PAYPAL_SANDBOX_MERCHANT_EMAIL`; this override is ignored in live mode. Before enabling live mode, use the sandbox to verify the real merchant setup, approval, cancellation, returning after payment, capture retries, and wallet credit. Real PayPal authorization/settlement cannot be verified without merchant credentials.
+The PayPal application must be authorized to receive payment for the configured recipient. Sandbox needs merchant/recipient configuration that PayPal's sandbox recognizes; a live email address is not automatically a sandbox business account. If sandbox uses a different business-account email, set `PAYPAL_SANDBOX_MERCHANT_EMAIL`; this override is ignored in live mode. Live mode requires its own valid `PAYPAL_MERCHANT_EMAIL` and never falls back to a sandbox recipient. Before enabling live mode, use the sandbox to verify the real merchant setup, approval, cancellation, returning after payment, capture retries, and wallet credit. Real PayPal authorization/settlement cannot be verified without merchant credentials.
 
 The browser creates an order on the server and redirects to PayPal. After approval, it submits the returned order ID to the server. Only PayPal's authenticated order/capture responses can award attempts. The server verifies ownership, a completed capture, exact $0.99 USD amount, recipient email, order reference, and a previously unused capture ID. Repeating a capture after a network interruption does not award another pack. A cancellation or a forged return URL grants nothing.
 

@@ -17,7 +17,7 @@ The HTTP server defaults to port 8080. Deploy behind HTTPS and configure `PUPPY_
 
 The Dockerfile builds the source and starts the bundled server as the unprivileged `node` user. Mount a persistent writable volume at `/data`; `PUPPY_DATA_DIR=/data` is supplied by the image. On a platform such as Render, attach a persistent disk and ensure it is writable by the runtime user. Without persistence, paid wallets and receipts can disappear on redeployment. Use a single server instance with this JSON-backed wallet storage; a shared transactional database is needed before horizontally scaling it.
 
-Payments are disabled until valid PayPal merchant credentials and a public return origin are configured. See [PayPal configuration](paypal.md). Browser payment returns must reach this same server and retain the original session cookie. Do not put credentials into client JavaScript, Capacitor assets, or Git.
+Payment details currently use a non-payable placeholder. Payments are disabled until a real merchant recipient, valid PayPal credentials and a public return origin are configured. See [PayPal configuration](paypal.md). Browser payment returns must reach this same server and retain the original session cookie. Do not put credentials into client JavaScript, Capacitor assets, or Git.
 
 The PWA installs from supporting browsers after the game has been served over HTTPS (localhost is allowed for development). It caches the game and artwork for offline play, never API requests or PayPal return URLs. Offline play cannot verify or credit purchases.
 

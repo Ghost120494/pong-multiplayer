@@ -27,7 +27,7 @@ For optional browser QA, with Playwright and Chromium available, start the serve
 
 Puppy Pals is the home page. Existing Pong, Snake and Incremental games remain available at `/pong/`, `/snake/` and `/incremental/`. The original match-3 route redirects to Puppy Pals.
 
-PayPal packs cost **$0.99 USD for five attempts**, payable to `jasonwilliams1204@gmail.com`. Checkout remains unavailable until the merchant's PayPal app credentials, public return origin and persistent wallet storage are configured. Payments are verified on the server before attempts are credited; no card information is stored by the game.
+The extra-attempt pack is **$0.99 USD for five attempts**. Payment details currently use the non-payable placeholder `merchant@example.invalid`; the shop shows **Purchases coming soon** until a real merchant, PayPal app credentials, public return origin and persistent wallet storage are configured privately on the server. The game contains no personal payment address. Payments are verified on the server before attempts are credited; no card information is stored by the game.
 
 See [PayPal setup](docs/paypal.md) and [web/native publishing](docs/publishing.md). Native apps are not signed or submitted, and native in-app billing still requires platform-specific work.
 
